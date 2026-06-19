@@ -31,7 +31,7 @@ class GridWorldEnv:
         self.agent_y = 0
         self.objects: list[SceneObject] = []
 
-    def reset(self) -> tuple[int, int, int, int, int]:
+    def reset(self) -> tuple[int, int, int, int, int, int, int, int, int]:
         positions = self._sample_positions(4)
         self.agent_x, self.agent_y = positions[0]
         object_specs = [
@@ -45,35 +45,65 @@ class GridWorldEnv:
         ]
         return self._observation()
 
-    def step(self, action: Action) -> tuple[tuple[int, int, int, int, int], float, bool, dict[str, object]]:
-        target_before = self._target_object()
-        previous_distance = self._manhattan_distance(self.agent_x, self.agent_y, target_before.x, target_before.y)
+    def step(self, action: Action) -> tuple[tuple[int, int, int, int, int, int, int, int, int], float, bool, dict[str, object]]:
+        target = self._target_object()
+        previous_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
         previous_position = (self.agent_x, self.agent_y)
 
+        new_x, new_y = self.agent_x, self.agent_y
         if action == UP:
-            self.agent_y = max(0, self.agent_y - 1)
+            new_y = max(0, self.agent_y - 1)
         elif action == DOWN:
-            self.agent_y = min(self.size - 1, self.agent_y + 1)
+            new_y = min(self.size - 1, self.agent_y + 1)
         elif action == LEFT:
-            self.agent_x = max(0, self.agent_x - 1)
+            new_x = max(0, self.agent_x - 1)
         elif action == RIGHT:
-            self.agent_x = min(self.size - 1, self.agent_x + 1)
+            new_x = min(self.size - 1, self.agent_x + 1)
 
-        target_after = self._target_object()
-        current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target_after.x, target_after.y)
-        done = self.agent_x == target_after.x and self.agent_y == target_after.y
-        reward = -0.01 + 0.02 * (previous_distance - current_distance)
-        if previous_position == (self.agent_x, self.agent_y):
-            reward -= 0.03
-        if done:
-            reward = 1.0
+        hit_distractor = any(
+            obj.label != self.target_label and new_x == obj.x and new_y == obj.y
+            for obj in self.objects
+        )
 
-        info = {"target_label": target_after.label, "target_position": (target_after.x, target_after.y)}
+        if hit_distractor:
+            reward = -1.0
+            done = False
+        else:
+            self.agent_x, self.agent_y = new_x, new_y
+            current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
+            done = self.agent_x == target.x and self.agent_y == target.y
+            reward = -0.01 + 0.02 * (previous_distance - current_distance)
+            if previous_position == (self.agent_x, self.agent_y):
+                reward -= 0.03
+            if done:
+                reward = 1.0
+
+        info = {"target_label": target.label, "target_position": (target.x, target.y)}
         return self._observation(), reward, done, info
 
-    def _observation(self) -> tuple[int, int, int, int, int]:
+    def _observation(self) -> tuple[int, int, int, int, int, int, int, int, int]:
         detection = self.detector.detect(self.objects, (self.agent_x, self.agent_y), self.target_label)
-        return (self.agent_x, self.agent_y, detection.dx, detection.dy, int(detection.visible))
+        danger_up = int(any(
+            obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y - 1
+            for obj in self.objects
+        ))
+        danger_down = int(any(
+            obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y + 1
+            for obj in self.objects
+        ))
+        danger_left = int(any(
+            obj.label != self.target_label and obj.x == self.agent_x - 1 and obj.y == self.agent_y
+            for obj in self.objects
+        ))
+        danger_right = int(any(
+            obj.label != self.target_label and obj.x == self.agent_x + 1 and obj.y == self.agent_y
+            for obj in self.objects
+        ))
+        return (
+            self.agent_x, self.agent_y,
+            detection.dx, detection.dy, int(detection.visible),
+            danger_up, danger_down, danger_left, danger_right,
+        )
 
     def _target_object(self) -> SceneObject:
         for scene_object in self.objects:

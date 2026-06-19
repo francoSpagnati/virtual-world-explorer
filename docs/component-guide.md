@@ -1,148 +1,603 @@
 # Component Guide
 
-This file explains every piece of the minimal prototype and why it exists.
+Questo documento spiega **ogni singola funzione** del progetto "Virtual World Explorer",
+come si incastrano tra loro, e perché sono state scritte in quel modo.
 
-## Overall flow
+---
 
-1. `main.py` trains the agent.
-2. `GridWorldEnv` generates a tiny 2D scene.
-3. `SemanticDetector` reads the scene and returns a semantic hint about the target object.
-4. `QLearningAgent` uses that hint plus its current position to choose a move.
-5. `OpenGLRenderer` draws the final scene so you can see the agent navigate.
+## Che cosa fa questo progetto?
 
-The design is intentionally simple. The code is small enough to read top to bottom without jumping across many abstractions.
+Immagina un **robotino** (l'agente) che si muove su una **scacchiera 7×7**.
+Sulla scacchiera ci sono tre oggetti: una **sedia** (il bersaglio da raggiungere),
+un **tavolo** e una **lampada** (distrattori / ostacoli).
 
-## `requirements.txt`
+Il robotino all'inizio non sa dove sia la sedia. Deve **imparare da solo**,
+provando e sbagliando (come un bambino che impara a camminare).
+Ogni volta che si avvicina alla sedia, riceve una **caramella** (ricompensa positiva).
+Ogni volta che sbatte contro un ostacolo, riceve una **punizione** e resta fermo.
+Alla fine, dopo tanti tentativi, impara a raggiungere la sedia **evitando** tavolo e lampada.
 
-This file lists the only external runtime dependencies.
+Il tutto è mostrato in una **finestrella grafica** (OpenGL) dove si vede il robotino
+muoversi sulla griglia.
 
-- `numpy` is kept available for future extensions, even if the current prototype does not need heavy numeric work.
-- `PyOpenGL` provides the GFX layer.
-- `glfw` creates the OpenGL window and handles the event loop.
+---
 
-## `src/virtual_world_explorer/env.py`
+## Come sono organizzati i file
 
-This is the environment.
+```
+virtual-world-explorer/
+├── requirements.txt          <-- cosa installare per far funzionare il progetto
+├── src/
+│   └── virtual_world_explorer/
+│       ├── __init__.py       <-- trasforma la cartella in un "pacchetto" Python
+│       ├── env.py            <-- il mondo: griglia, oggetti, regole del gioco
+│       ├── agent.py          <-- il robotino: come impara e decide cosa fare
+│       ├── detector.py       <-- gli "occhi" del robotino: dove sono gli oggetti?
+│       ├── render.py         <-- il pittore: disegna la griglia nella finestra
+│       └── main.py           <-- il regista: coordina tutto quanto
+└── docs/
+    └── component-guide.md    <-- questo file
+```
 
-### `SceneObject`
+---
 
-Represents one object inside the world.
+## `requirements.txt` — Le dipendenze
 
-- `label` is the semantic class, such as `chair` or `table`.
-- `x` and `y` are the grid coordinates.
-- `color` is only for visualization.
+Solo 2 librerie esterne:
 
-### `GridWorldEnv`
+| Libreria | A cosa serve |
+|----------|-------------|
+| `PyOpenGL` | Disegna la finestra con i quadratini colorati |
+| `glfw` | Crea la finestra, gestisce mouse/tastiera |
 
-Owns the grid, the agent position, and the scene objects.
+Per installarle: `pip install -r requirements.txt`
 
-- `reset()` creates a new scene with one target object and two distractors.
-- `step(action)` moves the agent and returns the next observation, reward, and termination flag.
-- `_observation()` builds the state that the RL agent sees.
-- `_target_object()` finds the target object by label.
-- `_sample_positions()` keeps object placement simple and collision-free.
+---
 
-### Reward logic
+## `env.py` — L'ambiente (il "mondo" del gioco)
 
-The reward is intentionally minimal.
+Questo file descrive **la scacchiera**, gli **oggetti** sopra, e le **regole** del gioco.
 
-- Each step costs a small negative reward.
-- Moving closer to the target adds a small shaping bonus.
-- Reaching the target gives a large positive reward.
+### Costanti globali
 
-This keeps training simple while still encouraging goal-directed behavior.
+| Nome | Valore | Significato |
+|------|--------|-------------|
+| `UP` | 0 | Muovi verso l'alto |
+| `DOWN` | 1 | Muovi verso il basso |
+| `LEFT` | 2 | Muovi verso sinistra |
+| `RIGHT` | 3 | Muovi verso destra |
 
-## `src/virtual_world_explorer/detector.py`
+Sono solo dei nomi facili per non dover ricordare numeri a memoria.
 
-This is the semantic detection layer.
+### `SceneObject` — Un oggetto sulla scacchiera
 
-### `Detection`
+```
+SceneObject(label="chair", x=3, y=5, color=(0.1, 0.7, 0.2))
+```
 
-Stores the result of the semantic detector.
+Contiene:
+- `label`: il nome dell'oggetto (`"chair"`, `"table"`, `"lamp"`)
+- `x`, `y`: la posizione sulla griglia (da 0 a 6)
+- `color`: il colore RGB (serve solo per disegnare)
 
-- `label` is the recognized class.
-- `dx` and `dy` are the coarse direction toward the target.
-- `visible` says whether the target is within the detector range.
+### `GridWorldEnv` — IL MONDO
 
-### `SemanticDetector`
+È la classe principale. Gestisce tutto: la posizione del robotino, gli oggetti, i movimenti.
 
-This is the minimal stand-in for a real vision-language detector such as OWL.
+#### `__init__(size=7, seed=7, detector=None)`
 
-- `detect()` looks for the target object in the scene.
-- If the target is close enough, it returns a direction hint.
-- If the target is out of range, it returns `visible=False` and zeros for the direction.
+Prepara un mondo nuovo. Cosa fa:
+1. Crea una griglia `size × size` (7 per 7 = 49 caselle)
+2. Prepara un generatore di numeri casuali con `seed` (se usi lo stesso seed, ottieni sempre le stesse posizioni — utile per testare)
+3. Attacca un "detector" (gli occhi del robotino), oppure ne crea uno nuovo
+4. Segna che l'oggetto da raggiungere è la sedia (`target_label = "chair"`)
+5. Mette il robotino in posizione (0, 0) all'inizio
+6. Prepara una lista vuota di oggetti
 
-In a more realistic version, this module would be the place where image crops or billboards are passed into OWL or a similar model.
+#### `reset()` — Ricomincia una partita
 
-## `src/virtual_world_explorer/agent.py`
+Cosa fa passo-passo:
+1. Chiama `_sample_positions(4)` per trovare 4 posizioni che non si sovrappongono
+2. Mette il robotino nella prima posizione
+3. Crea 3 oggetti:
+   - La **sedia** (colore verde) — il bersaglio
+   - Il **tavolo** (colore blu) — distrattore/ostacolo
+   - La **lampada** (colore giallo) — distrattore/ostacolo
+4. Restituisce lo stato iniziale (cosa vede il robotino)
 
-This is the RL agent.
+#### `step(action)` — Muovi di un passo
 
-### `QLearningAgent`
+Questa è la funzione **più importante**. Riceve un'azione (0=su, 1=giù, 2=sinistra, 3=destra) e:
 
-The project uses tabular Q-learning because it is the smallest training setup that still counts as reinforcement learning.
+1. **Salva com'era la situazione prima** (posizione del robotino, distanza dalla sedia)
+2. **Calcola la nuova posizione** senza muovere ancora il robotino
+3. **Controlla se c'è un ostacolo** nella nuova posizione:
+   - Se la casella contiene un tavolo o una lampada → **collisione!**
+   - Il robotino **non si muove** (resta fermo)
+   - Riceve una punizione di **-1.0** (tanto quanto la ricompensa per aver raggiunto la sedia)
+   - Non ha finito (`done = False`), la partita continua
+4. **Se non c'è collisione**, muove il robotino e calcola:
+   - `done`: "ha raggiunto la sedia?" (confronta le coordinate)
+   - Ricompensa base: **-0.01** per ogni passo (così impara a non perdere tempo)
+   - Bonus se si avvicina alla sedia: `+0.02 * (distanza_prima - distanza_dopo)`. Se si allontana, diventa negativo!
+   - Se resta fermo (caso raro, quando prova a uscire dalla griglia): **-0.03**
+   - Se raggiunge la sedia: **+1.0**
+5. Restituisce: `(osservazione, ricompensa, finito?, info)` — esattamente come richiesto dagli standard di RL
 
-- `choose_action()` implements epsilon-greedy exploration.
-- `learn()` updates the Q-table from the reward signal.
-- `decay_exploration()` slowly reduces randomness so the policy becomes more stable over time.
+#### `_observation()` — Cosa vede il robotino (lo STATO)
 
-The state is small on purpose: agent position, coarse direction to the target, and a visibility flag.
+Questa funzione costruisce un "numero di telefono" a 9 cifre. Ogni cifra è un numero intero.
 
-## `src/virtual_world_explorer/render.py`
+```
+(agent_x, agent_y, target_dx, target_dy, visible, danger_up, danger_down, danger_left, danger_right)
+```
 
-This file handles the GFX output.
+Spieghiamo ogni cifra:
 
-### `RendererConfig`
+| Cifra | Valori possibili | Cosa significa |
+|-------|-----------------|----------------|
+| `agent_x` | 0-6 | Posizione X del robotino |
+| `agent_y` | 0-6 | Posizione Y del robotino |
+| `target_dx` | -1, 0, 1 | Direzione della sedia sull'asse X (-1 = sinistra, 0 = stessa riga, 1 = destra) |
+| `target_dy` | -1, 0, 1 | Direzione della sedia sull'asse Y (-1 = sotto, 0 = stessa colonna, 1 = sopra) |
+| `visible` | 0 o 1 | La sedia è nel raggio di visione? (1 = sì) |
+| `danger_up` | 0 o 1 | C'è un ostacolo nella casella SOPRA? (1 = attenzione!) |
+| `danger_down` | 0 o 1 | C'è un ostacolo nella casella SOTTO? |
+| `danger_left` | 0 o 1 | C'è un ostacolo nella casella SINISTRA? |
+| `danger_right` | 0 o 1 | C'è un ostacolo nella casella DESTRA? |
 
-Small configuration object for window size and cell padding.
+Esempio: `(3, 2, 1, 1, 1, 0, 1, 0, 0)` significa:
+> "Sono in posizione (3,2), la sedia è in basso a destra e la vedo,
+> c'è un ostacolo sotto di me, attenzione a non andare giù!"
 
-### `OpenGLRenderer`
+I 4 flag di **danger** sono la chiave per evitare gli ostacoli:
+se `danger_left = 1`, il robotino sa che a sinistra c'è un tavolo o una lampada
+e impara a **non andare a sinistra** (altrimenti prende -1.0).
 
-Draws the scene with OpenGL.
+#### `_target_object()` — Cerca la sedia
 
-- `initialize()` creates the GLFW window and sets up the 2D orthographic projection.
-- `draw()` clears the screen and draws the grid, objects, and agent.
-- `should_close()` lets the main loop stop cleanly.
-- `poll()` processes window events.
-- `shutdown()` releases OpenGL and GLFW resources.
+Scorre la lista degli oggetti e restituisce quello con etichetta `"chair"`.
+Se non lo trova (dovrebbe essere impossibile), va in panico.
 
-The renderer is intentionally plain: no shader pipeline, no engine, no framework abstraction.
+#### `_sample_positions(count)` — Pesca posizioni casuali
 
-## `src/virtual_world_explorer/main.py`
+Genera `count` posizioni (coppie x,y) che non si sovrappongono.
+Usa il generatore casuale interno (`self.random`), così con lo stesso `seed`
+si ottengono sempre le stesse posizioni.
 
-This is the entry point.
+#### `_manhattan_distance(x1,y1, x2,y2)` — Distanza "a passi"
 
-### `train_agent()`
+Calcola la distanza tra due caselle contando quanti passi servono per andare da una all'altra
+muovendosi solo su/giù/sinistra/destra (come un taxi che si muove tra i palazzi).
 
-Runs a short Q-learning loop.
+Formula magica: `|x1 - x2| + |y1 - y2|` (dove `|` significa "senza segno")
 
-- Resets the environment.
-- Chooses actions.
-- Applies Q-learning updates.
-- Prints progress every 50 episodes.
+---
 
-### `run_demo()`
+## `detector.py` — Gli occhi del robotino
 
-Runs a short visual demo after training.
+Questo modulo simula un **rilevatore di oggetti** (nella realtà sarebbe un'intelligenza artificiale
+che guarda le immagini e dice "ecco una sedia!").
 
-- Temporarily disables exploration.
-- Lets the agent follow the learned policy.
-- Renders each step with OpenGL.
+### `Detection` — Il risultato di una "guardata"
 
-### `main()`
+```
+Detection(label="chair", dx=1, dy=1, visible=True)
+```
 
-The top-level orchestration function.
+Un pacchettino con:
+- `label`: cosa ho visto
+- `dx`, `dy`: direzione approssimativa verso l'oggetto
+- `visible`: l'ho visto davvero o non si vede?
 
-1. Train the agent.
-2. Show the trained policy in the OpenGL window.
+### `SemanticDetector` — Il rilevatore finto
 
-## Why this structure is minimal
+#### `__init__(vision_radius=3)`
 
-The project is split only by responsibility, not by abstraction layers.
+Prepara il rilevatore. Il `vision_radius` dice quanto lontano vede il robotino (3 caselle = vede mezza griglia).
 
-- Environment logic stays in one place.
-- Detection logic stays in one place.
-- Learning logic stays in one place.
-- Rendering logic stays in one place.
+#### `detect(objects, agent_position, target_label)`
 
-That keeps the code easy to inspect and easy to replace later if you want a real OWL-based detector or a richer scene.
+Il cuore del detector. Prende la lista degli oggetti, la posizione del robotino,
+e il nome dell'oggetto da cercare.
+
+Cosa fa:
+1. Cerca l'oggetto con l'etichetta giusta (es. `"chair"`)
+2. Calcola la differenza di posizione: `dx = sedia.x - robot.x`, `dy = sedia.y - robot.y`
+3. Controlla se la sedia è **visibile** (distanza ≤ `vision_radius` in entrambi gli assi)
+4. **Se non è visibile**: restituisce `(dx=0, dy=0, visible=False)` — dice "non la vedo"
+5. **Se è visibile**: restituisce la **direzione "arrotondata"** usando `_sign()`:
+   - `dx` positivo → 1 (destra), negativo → -1 (sinistra), zero → 0
+   - `dy` positivo → 1 (sopra), negativo → -1 (sotto), zero → 0
+   - Questo trasforma "la sedia è a 3 caselle di distanza a destra" in un semplice "è a destra"
+
+**Perché arrotondare?** Perché lo stato deve essere piccolo.
+"Destra o sinistra" è abbastanza per imparare, non serve sapere esattamente a quanti passi.
+
+#### `_sign(value)` — Arrotonda la direzione
+
+| Valore | Risultato |
+|--------|-----------|
+| Negativo | -1 |
+| Zero | 0 |
+| Positivo | 1 |
+
+Semplice!
+
+---
+
+## `agent.py` — Il cervello del robotino
+
+Questo modulo implementa **Q-learning**, un algoritmo di apprendimento famoso.
+Immagina una **tabella** (Q-table) con:
+- **Righe**: tutti i possibili "stati" (cioè il numero di telefono a 9 cifre)
+- **Colonne**: le 4 azioni (su, giù, sinistra, destra)
+- **Celle**: un voto (Q-value) che dice "in questo stato, quest'azione è buona?"
+
+### `State` — Il tipo dello stato
+
+`tuple[int, ...]` — una sequenza di numeri interi di qualsiasi lunghezza.
+
+### `QLearningAgent` — L'agente che impara
+
+#### `__init__(actions=4, alpha=0.2, gamma=0.95, epsilon=0.5)`
+
+Prepara il robotino:
+- `actions`: 4 mosse possibili (su/giù/sinistra/destra)
+- `alpha` (0.2): "velocità di apprendimento" — quanto velocemente impara dai nuovi dati
+- `gamma` (0.95): "sconto sul futuro" — quanto conta una ricompensa futura rispetto a una immediata
+- `epsilon` (0.5): "voglia di esplorare" — all'inizio il 50% delle mosse sono **casuali** (per scoprire il mondo)
+
+La Q-table è un `defaultdict`: se chiedi uno stato mai visto, restituisce `[0.0, 0.0, 0.0, 0.0]`
+(tutte le azioni sembrano ugualmente buone).
+
+#### `choose_action(state)` — Decidi la prossima mossa
+
+Il robotino lancia una monetina:
+- Se esce **testa** (probabilità = `epsilon`): sceglie un'azione **a caso** (esplora!)
+- Se esce **croce**: guarda nella Q-table e sceglie l'azione con il **voto più alto** (sfrutta!)
+
+Dopo molti episodi, `epsilon` diventa piccolo e il robotino smette di esplorare,
+usando solo quello che ha imparato.
+
+#### `learn(state, action, reward, next_state, done)` — Impara dall'esperienza
+
+Questa è la **formula magica del Q-learning**:
+
+```
+Q(stato, azione) += alpha * (ricompensa + gamma * max(Q(stato_nuovo)) - Q(stato, azione))
+```
+
+Scomponiamo:
+1. **`Q(stato, azione)`**: il voto corrente per "in questo stato, fare questa azione"
+2. **`ricompensa`**: cosa ho ottenuto? (-1.0 se ostacolo, +1.0 se sedia, ecc.)
+3. **`gamma * max(Q(stato_nuovo))`**: "la luce in fondo al tunnel" — il voto migliore del nuovo stato (cosa mi aspetto di guadagnare in futuro)
+4. **`ricompensa + gamma * max(Q(stato_nuovo))`**: il "target" — la vera ricompensa totale che mi aspetto
+5. **`target - Q(stato, azione)`**: l'errore — quanto ho sbagliato la previsione?
+6. **`alpha * errore`**: quanto voglio correggere il voto (un pezzettino alla volta)
+
+Se `done = True` (partita finita), il futuro non esiste, quindi `max(Q(stato_nuovo)) = 0`.
+
+#### `decay_exploration(minimum=0.05, factor=0.997)` — Diventa più saggio col tempo
+
+Ad ogni episodio, riduce un po' la voglia di esplorare:
+
+```
+epsilon = max(0.05, epsilon × 0.997)
+```
+
+Dopo ~800 episodi, `epsilon` arriva a 0.05 = 5%. Il robotino è diventato "adulto"
+e usa quasi sempre quello che ha imparato.
+
+---
+
+## `render.py` — Il pittore (OpenGL)
+
+Prende il mondo (`GridWorldEnv`) e lo disegna in una finestra usando OpenGL.
+Tutto è fatto in modo semplice ("modalità immediata"), senza shader o motori grafici.
+
+### `RendererConfig` — Impostazioni grafiche
+
+Piccole regolazioni su finestra e caratteri.
+
+### `OpenGLRenderer` — Il disegnatore
+
+#### `__init__(env, config)`
+
+Riceve il mondo da disegnare e le impostazioni.
+
+#### `initialize()` — Apre la finestra
+
+1. Avvia GLFW (il sistema che gestisce le finestre)
+2. Crea una finestra 720×720 pixel con titolo "Virtual World Explorer"
+3. Imposta la proiezione 2D che va da (0,0) a (7,7) — come la griglia!
+4. Sfondo grigio scuro
+
+#### `draw()` — Dipinge un fotogramma
+
+Chiamato a ogni passo. Cosa disegna (in ordine):
+1. **Griglia**: linee orizzontali e verticali per separare le 49 caselle
+2. **Oggetti**: quadrati colorati:
+   - Sedia: **verde**
+   - Tavolo: **blu**
+   - Lampada: **gialla**
+3. **Robotino**: quadrato bianco leggermente più piccolo
+4. **HUD**: un pannello in alto a sinistra con:
+   - `TARGET: CHAIR` — cosa deve raggiungere
+   - `AGENT: x, y` — posizione corrente
+   - `VISIBLE: True/False` — la sedia è visibile?
+
+#### `should_close()` — Devo chiudere?
+
+Controlla se l'utente ha cliccato sulla X della finestra.
+
+#### `poll()` — Ascolta gli eventi
+
+Permette alla finestra di rispondere al mouse/tastiera.
+
+#### `shutdown()` — Chiude tutto
+
+Pulisce e libera la memoria.
+
+#### `_draw_grid()` — Le linee della griglia
+
+Disegna `size+1` linee orizzontali e verticali in grigio scuro.
+
+#### `_draw_objects()` — I quadratini colorati
+
+Ogni oggetto (sedia, tavolo, lampada) viene disegnato come un quadrato
+con un po' di padding (rientro) per non toccare i bordi della casella.
+
+#### `_draw_agent()` — Il robotino bianco
+
+Un quadrato bianco, con un padding leggermente maggiore per distinguerlo dagli oggetti.
+
+#### `_draw_hud_overlay(lines)` — Il pannello informativo
+
+1. Cambia la proiezione per lavorare in pixel (invece che in coordinate di griglia)
+2. Disegna un rettangolo scuro come sfondo del pannello
+3. Per ogni riga di testo, chiama `_draw_text()` per scrivere le lettere
+4. Ripristina la proiezione normale per il prossimo fotogramma
+
+#### `_draw_text(x, y, text, scale)` — Disegna testo con pixel art
+
+Per ogni carattere del testo:
+1. Cerca il glifo (la "mappa" del carattere) nel dizionario `_GLYPHS`
+2. Chiama `_draw_glyph()` per disegnarlo
+3. Sposta il cursore a destra per il prossimo carattere
+
+#### `_draw_glyph(x, y, glyph, scale)` — Un singolo carattere
+
+Un carattere è una griglia 5×7 di bit (5 colonne, 7 righe).
+Ogni riga è una stringa come `"01110"` dove `1` significa "accendi questo pixel".
+Disegna tanti quadratini piccoli per formare la lettera.
+
+### `_GLYPHS` — Il dizionario dei caratteri
+
+Contiene le "mappe" di lettere e numeri: A, B, C, D, E, G, I, L, N, O, P, R, S, T, U, V, Y,
+i segni `:` e `,`, e le cifre 0-9. Ogni carattere è una tupla di 7 stringhe (una per riga).
+
+Esempio: la lettera **A**:
+
+```
+01110     ..##.
+10001     #...#
+10001     #...#
+11111     #####
+10001     #...#
+10001     #...#
+10001     #...#
+```
+
+---
+
+## `main.py` — Il regista
+
+Coordina tutto: addestra il robotino, poi mostra il risultato.
+
+### `train_agent(episodes=5000, max_steps=50)`
+
+Il ciclo di addestramento:
+
+1. Crea il mondo (`GridWorldEnv`) e il robotino (`QLearningAgent`)
+2. Per ogni episodio (5000 volte):
+   - Ricomincia il mondo con `reset()` (nuove posizioni casuali)
+   - Per massimo 50 passi:
+     - Il robotino sceglie un'azione con `choose_action()`
+     - Il mondo esegue l'azione con `step(action)` (si muove o sbatte)
+     - Il robotino impara dall'esperienza con `learn()`
+     - Se ha raggiunto la sedia, smette
+   - Riduce l'esplorazione con `decay_exploration()`
+   - Ogni 50 episodi stampa il progresso
+3. Restituisce il mondo e il robotino addestrato
+
+### `run_demo(env, agent, steps=None)`
+
+Mostra il robotino in azione:
+1. Crea il renderer (la finestra OpenGL)
+2. **Congela l'esplorazione** (`epsilon = 0.0`): il robotino userà solo ciò che ha imparato
+3. Per ogni passo:
+   - Usa `_choose_action_without_loop()` per scegliere l'azione (evita i loop)
+   - Muove il robotino e disegna la scena
+   - Aspetta 0.35 secondi (così si vede il movimento)
+   - Se raggiunge la sedia, resetta il mondo
+4. Quando si chiude la finestra, ripristina `epsilon` e pulisce il renderer
+
+### `_preview_position(env, action)` — Dove finirei?
+
+Calcola dove andrebbe il robotino se eseguisse quell'azione.
+Se la casella contiene un ostacolo, restituisce la posizione **corrente** (perché
+il movimento viene bloccato da `step()`).
+
+### `_choose_action_without_loop(env, state, agent, recent_positions)`
+
+Una versione "intelligente" di `choose_action` che evita i loop:
+1. Prende i voti della Q-table per lo stato corrente
+2. Ordina le azioni dal voto più alto al più basso
+3. Per ogni azione, calcola un punteggio:
+   - Base = voto dalla Q-table
+   - Se l'azione mi fa restare fermo: **-1.0**
+   - Se l'azione porta in una casella visitata di recente: **-0.7**
+   - Se l'azione mi fa tornare indietro (dov'ero un passo fa): **-0.5**
+4. Sceglie l'azione col punteggio più alto
+
+Questo sistema anti-loop è fondamentale: senza di esso, il robotino potrebbe
+rimanere intrappolato a fare avanti e indietro (destra → sinistra → destra → sinistra → ...).
+
+### `main()` — Via!
+
+Unisce tutto:
+1. Addestra il robotino per 5000 episodi
+2. Mostra il risultato nella finestra OpenGL
+
+---
+
+## Il flusso completo (tutto insieme)
+
+```
+main()
+  │
+  ├─ train_agent(5000)
+  │     │
+  │     ├─ Crea: GridWorldEnv + QLearningAgent
+  │     │
+  │     └─ Per 5000 episodi:
+  │           │
+  │           ├─ env.reset()
+  │           │     ├─ _sample_positions(4) → 4 caselle senza sovrapposizioni
+  │           │     ├─ Mette il robotino in posizione
+  │           │     ├─ Crea sedia + tavolo + lampada
+  │           │     └─ _observation() → stato a 9 cifre
+  │           │
+  │           └─ Finché non raggiunge la sedia (max 50 passi):
+  │                 │
+  │                 ├─ agent.choose_action(state)
+  │                 │     ├─ Se epsilon: azione casuale
+  │                 │     └─ Se no: max dalla Q-table
+  │                 │
+  │                 ├─ env.step(action)
+  │                 │     ├─ Calcola nuova posizione
+  │                 │     ├─ C'è un ostacolo? → -1.0, resta fermo
+  │                 │     ├─ Sedia raggiunta? → +1.0, finito
+  │                 │     ├─ Altrimenti → -0.01 + bonus di avvicinamento
+  │                 │     └─ _observation() → nuovo stato
+  │                 │
+  │                 └─ agent.learn(state, action, reward, next_state, done)
+  │                       └─ Q(s,a) += alpha * (reward + gamma * max(Q(s')) - Q(s,a))
+  │
+  └─ run_demo(env, agent)
+        │
+        ├─ epsilon = 0.0 (niente esplorazione)
+        │
+        └─ Finché non chiudo la finestra:
+              │
+              ├─ _choose_action_without_loop()
+              │     ├─ Prende i voti dalla Q-table
+              │     ├─ Penalizza loop, posizioni recenti, movimenti inutili
+              │     └─ Sceglie la migliore
+              │
+              ├─ env.step(action)
+              │
+              ├─ renderer.draw()
+              │     ├─ _draw_grid()
+              │     ├─ _draw_objects()
+              │     ├─ _draw_agent()
+              │     └─ _draw_hud_overlay()
+              │
+              ├─ time.sleep(0.35)  ← aspetta un po' per far vedere il movimento
+              │
+              └─ Se sedia raggiunta: env.reset() → ricomincia da capo
+```
+
+---
+
+## Perché funziona?
+
+### La Q-table
+
+Immagina una **tabella** con migliaia di righe (gli stati possibili) e 4 colonne (le azioni).
+All'inizio tutti i voti sono 0. Il robotino fa cose a caso.
+
+Dopo aver provato:
+- "Su → sedia!" → voto di SU aumenta (perché ha avuto +1.0)
+- "Giù → ostacolo!" → voto di GIÙ diminuisce (perché ha avuto -1.0)
+- "Su → mi sono avvicinato" → voto di SU aumenta un pochino
+
+Dopo centinaia di episodi, la tabella contiene la **saggezza** del robotino:
+per ogni situazione, sa qual è la mossa migliore.
+
+### Le danger flag
+
+Il trucco più importante: lo stato include 4 numeri che dicono
+"c'è un ostacolo in questa direzione?". Così:
+
+- Stato = `(3, 4, 0, 1, 1, 0, 0, 1, 0)` + azione = SINISTRA = collisione!
+- `Q([3,4,0,1,1,0,0,1,0], SINISTRA)` diventa negativo
+- Robotino impara: da questo stato, non andare a sinistra!
+
+Se la danger flag non ci fosse, il robotino non saprebbe **perché** ha preso -1.0
+quando è andato a sinistra. Con la danger flag, impara ad associare
+"danger_left = 1" con "non andare a sinistra".
+
+### La penalità forte (-1.0)
+
+Collidere con un ostacolo fa **-1.0**, esattamente quanto prendere la sedia fa **+1.0**.
+Questo significa che anche un solo scontro annulla completamente la gioia di aver raggiunto
+il bersaglio. Il robotino impara che **non vale mai la pena** sbattere.
+
+---
+
+## Cosa significa ogni numero?
+
+### Lo stato (osservazione a 9 cifre)
+
+```
+(ax, ay, tdx, tdy, vis, dup, ddown, dleft, dright)
+ ^    ^    ^     ^     ^    ^     ^      ^       ^
+ 1    2    3     4     5    6     7      8       9
+```
+
+| Posizione | Variabile | Esempio | Cosa dice |
+|-----------|-----------|---------|-----------|
+| 1 | `ax` | 3 | Robotino è alla colonna 3 |
+| 2 | `ay` | 2 | Robotino è alla riga 2 |
+| 3 | `tdx` | 1 | La sedia è a destra |
+| 4 | `tdy` | -1 | La sedia è sotto |
+| 5 | `vis` | 1 | La sedia è visibile |
+| 6 | `dup` | 0 | Sopra è libero |
+| 7 | `ddown` | 1 | **Sotto c'è un ostacolo!** |
+| 8 | `dleft` | 0 | A sinistra è libero |
+| 9 | `dright` | 0 | A destra è libero |
+
+### La ricompensa
+
+| Situazione | Ricompensa | Perché? |
+|------------|-----------|---------|
+| Passo normale | -0.01 | Ogni passo costa un po' per non perdere tempo |
+| Mi avvicino alla sedia | +0.02 × (distanza_prima - distanza_dopo) | Insegnamento graduale |
+| Mi allontano | Idem ma negativo | Impara che sta sbagliando strada |
+| Resto fermo (fuori dalla griglia) | -0.03 (aggiunto al normale) | "Non fare lo gnocco" |
+| **Collisione con ostacolo** | **-1.0** | **Punizione grossa** |
+| **Sedia raggiunta** | **+1.0** | **Grande ricompensa!** |
+
+---
+
+## Perché queste scelte tecniche?
+
+| Scelta | Motivo |
+|--------|--------|
+| Q-tabella invece di rete neurale | Più semplice, trasparente, non serve GPU |
+| Coordinate assolute (0-6) invece che one-hot | Stato compatto (~14k invece di milioni) |
+| Danger flag invece di coordinate degli ostacoli | Stato ancora più piccolo, focus sull'informazione utile |
+| Penalità -1.0 per collisione | Pari alla ricompensa del target: ogni collisione è inaccettabile |
+| Vision radius per il detector | Simula occhi reali (non vede tutta la griglia) |
+| Episodi con seed | Riproducibile — stessi semi = stessi risultati |
+| OpenGL senza shader | Minimo indispensabile per visualizzare |
+
+---
+
+## Riferimenti
+
+- **Q-learning**: Sutton & Barto, "Reinforcement Learning: An Introduction"
+- **OpenGL**: A. Shreiner et al., "OpenGL Programming Guide" (la "Red Book")
+- **GLFW**: https://www.glfw.org/ — documentazione ufficiale

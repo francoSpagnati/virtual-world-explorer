@@ -7,7 +7,7 @@ from .env import GridWorldEnv
 from .render import OpenGLRenderer
 
 
-def train_agent(episodes: int = 400, max_steps: int = 50) -> tuple[GridWorldEnv, QLearningAgent]:
+def train_agent(episodes: int = 5000, max_steps: int = 50) -> tuple[GridWorldEnv, QLearningAgent]:
     env = GridWorldEnv()
     agent = QLearningAgent()
 
@@ -71,10 +71,15 @@ def _preview_position(env: GridWorldEnv, action: int) -> tuple[int, int]:
         x = max(0, x - 1)
     elif action == 3:
         x = min(env.size - 1, x + 1)
+    if any(
+        obj.label != env.target_label and obj.x == x and obj.y == y
+        for obj in env.objects
+    ):
+        return (env.agent_x, env.agent_y)
     return x, y
 
 
-def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, int, int, int, int], agent: QLearningAgent, recent_positions: list[tuple[int, int]]) -> int:
+def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent: QLearningAgent, recent_positions: list[tuple[int, int]]) -> int:
     values = agent.q_values[state]
     ranked_actions = sorted(range(agent.actions), key=lambda action: values[action], reverse=True)
     current_position = (env.agent_x, env.agent_y)

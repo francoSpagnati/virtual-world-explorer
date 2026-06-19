@@ -4,11 +4,11 @@ from collections import defaultdict
 import random
 
 
-State = tuple[int, int, int, int, int]
+State = tuple[int, ...]
 
 
 class QLearningAgent:
-    def __init__(self, actions: int = 4, alpha: float = 0.2, gamma: float = 0.95, epsilon: float = 0.2) -> None:
+    def __init__(self, actions: int = 4, alpha: float = 0.2, gamma: float = 0.95, epsilon: float = 0.5) -> None:
         self.actions = actions
         self.alpha = alpha
         self.gamma = gamma
@@ -28,5 +28,5 @@ class QLearningAgent:
         target = reward + self.gamma * next_best
         self.q_values[state][action] = current + self.alpha * (target - current)
 
-    def decay_exploration(self, minimum: float = 0.05, factor: float = 0.98) -> None:
+    def decay_exploration(self, minimum: float = 0.05, factor: float = 0.997) -> None:
         self.epsilon = max(minimum, self.epsilon * factor)
