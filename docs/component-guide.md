@@ -7,17 +7,17 @@ come si incastrano tra loro, e perché sono state scritte in quel modo.
 
 ## Che cosa fa questo progetto?
 
-Immagina un **robotino** (l'agente) che si muove su una **scacchiera 7×7**.
+Immagina un **robottino** (l'agente) che si muove su una **scacchiera 7×7**.
 Sulla scacchiera ci sono tre oggetti: una **sedia** (il bersaglio da raggiungere),
 un **tavolo** e una **lampada** (distrattori / ostacoli).
 
-Il robotino all'inizio non sa dove sia la sedia. Deve **imparare da solo**,
+Il robottino all'inizio non sa dove sia la sedia. Deve **imparare da solo**,
 provando e sbagliando (come un bambino che impara a camminare).
 Ogni volta che si avvicina alla sedia, riceve una **caramella** (ricompensa positiva).
 Ogni volta che sbatte contro un ostacolo, riceve una **punizione** e resta fermo.
 Alla fine, dopo tanti tentativi, impara a raggiungere la sedia **evitando** tavolo e lampada.
 
-Il tutto è mostrato in una **finestrella grafica** (OpenGL) dove si vede il robotino
+Il tutto è mostrato in una **finestrella grafica** (OpenGL) dove si vede il robottino
 muoversi sulla griglia.
 
 ---
@@ -31,8 +31,8 @@ virtual-world-explorer/
 │   └── virtual_world_explorer/
 │       ├── __init__.py       <-- trasforma la cartella in un "pacchetto" Python
 │       ├── env.py            <-- il mondo: griglia, oggetti, regole del gioco
-│       ├── agent.py          <-- il robotino: come impara e decide cosa fare
-│       ├── detector.py       <-- gli "occhi" del robotino: dove sono gli oggetti?
+│       ├── agent.py          <-- il robottino: come impara e decide cosa fare
+│       ├── detector.py       <-- gli "occhi" del robottino: dove sono gli oggetti?
 │       ├── render.py         <-- il pittore: disegna la griglia nella finestra
 │       └── main.py           <-- il regista: coordina tutto quanto
 └── docs/
@@ -82,41 +82,41 @@ Contiene:
 
 ### `GridWorldEnv` — IL MONDO
 
-È la classe principale. Gestisce tutto: la posizione del robotino, gli oggetti, i movimenti.
+È la classe principale. Gestisce tutto: la posizione del robottino, gli oggetti, i movimenti.
 
 #### `__init__(size=7, seed=7, detector=None)`
 
 Prepara un mondo nuovo. Cosa fa:
 1. Crea una griglia `size × size` (7 per 7 = 49 caselle)
 2. Prepara un generatore di numeri casuali con `seed` (se usi lo stesso seed, ottieni sempre le stesse posizioni — utile per testare)
-3. Attacca un "detector" (gli occhi del robotino), oppure ne crea uno nuovo
+3. Attacca un "detector" (gli occhi del robottino), oppure ne crea uno nuovo
 4. Segna che l'oggetto da raggiungere è la sedia (`target_label = "chair"`)
-5. Mette il robotino in posizione (0, 0) all'inizio
+5. Mette il robottino in posizione (0, 0) all'inizio
 6. Prepara una lista vuota di oggetti
 
 #### `reset()` — Ricomincia una partita
 
 Cosa fa passo-passo:
 1. Chiama `_sample_positions(4)` per trovare 4 posizioni che non si sovrappongono
-2. Mette il robotino nella prima posizione
+2. Mette il robottino nella prima posizione
 3. Crea 3 oggetti:
    - La **sedia** (colore verde) — il bersaglio
    - Il **tavolo** (colore blu) — distrattore/ostacolo
    - La **lampada** (colore giallo) — distrattore/ostacolo
-4. Restituisce lo stato iniziale (cosa vede il robotino)
+4. Restituisce lo stato iniziale (cosa vede il robottino)
 
 #### `step(action)` — Muovi di un passo
 
 Questa è la funzione **più importante**. Riceve un'azione (0=su, 1=giù, 2=sinistra, 3=destra) e:
 
-1. **Salva com'era la situazione prima** (posizione del robotino, distanza dalla sedia)
-2. **Calcola la nuova posizione** senza muovere ancora il robotino
+1. **Salva com'era la situazione prima** (posizione del robottino, distanza dalla sedia)
+2. **Calcola la nuova posizione** senza muovere ancora il robottino
 3. **Controlla se c'è un ostacolo** nella nuova posizione:
    - Se la casella contiene un tavolo o una lampada → **collisione!**
-   - Il robotino **non si muove** (resta fermo)
+   - Il robottino **non si muove** (resta fermo)
    - Riceve una punizione di **-1.0** (tanto quanto la ricompensa per aver raggiunto la sedia)
    - Non ha finito (`done = False`), la partita continua
-4. **Se non c'è collisione**, muove il robotino e calcola:
+4. **Se non c'è collisione**, muove il robottino e calcola:
    - `done`: "ha raggiunto la sedia?" (confronta le coordinate)
    - Ricompensa base: **-0.01** per ogni passo (così impara a non perdere tempo)
    - Bonus se si avvicina alla sedia: `+0.02 * (distanza_prima - distanza_dopo)`. Se si allontana, diventa negativo!
@@ -124,7 +124,7 @@ Questa è la funzione **più importante**. Riceve un'azione (0=su, 1=giù, 2=sin
    - Se raggiunge la sedia: **+1.0**
 5. Restituisce: `(osservazione, ricompensa, finito?, info)` — esattamente come richiesto dagli standard di RL
 
-#### `_observation()` — Cosa vede il robotino (lo STATO)
+#### `_observation()` — Cosa vede il robottino (lo STATO)
 
 Questa funzione costruisce un "numero di telefono" a 9 cifre. Ogni cifra è un numero intero.
 
@@ -136,8 +136,8 @@ Spieghiamo ogni cifra:
 
 | Cifra | Valori possibili | Cosa significa |
 |-------|-----------------|----------------|
-| `agent_x` | 0-6 | Posizione X del robotino |
-| `agent_y` | 0-6 | Posizione Y del robotino |
+| `agent_x` | 0-6 | Posizione X del robottino |
+| `agent_y` | 0-6 | Posizione Y del robottino |
 | `target_dx` | -1, 0, 1 | Direzione della sedia sull'asse X (-1 = sinistra, 0 = stessa riga, 1 = destra) |
 | `target_dy` | -1, 0, 1 | Direzione della sedia sull'asse Y (-1 = sotto, 0 = stessa colonna, 1 = sopra) |
 | `visible` | 0 o 1 | La sedia è nel raggio di visione? (1 = sì) |
@@ -151,7 +151,7 @@ Esempio: `(3, 2, 1, 1, 1, 0, 1, 0, 0)` significa:
 > c'è un ostacolo sotto di me, attenzione a non andare giù!"
 
 I 4 flag di **danger** sono la chiave per evitare gli ostacoli:
-se `danger_left = 1`, il robotino sa che a sinistra c'è un tavolo o una lampada
+se `danger_left = 1`, il robottino sa che a sinistra c'è un tavolo o una lampada
 e impara a **non andare a sinistra** (altrimenti prende -1.0).
 
 #### `_target_object()` — Cerca la sedia
@@ -174,7 +174,7 @@ Formula magica: `|x1 - x2| + |y1 - y2|` (dove `|` significa "senza segno")
 
 ---
 
-## `detector.py` — Gli occhi del robotino
+## `detector.py` — Gli occhi del robottino
 
 Questo modulo simula un **rilevatore di oggetti** (nella realtà sarebbe un'intelligenza artificiale
 che guarda le immagini e dice "ecco una sedia!").
@@ -194,11 +194,11 @@ Un pacchettino con:
 
 #### `__init__(vision_radius=3)`
 
-Prepara il rilevatore. Il `vision_radius` dice quanto lontano vede il robotino (3 caselle = vede mezza griglia).
+Prepara il rilevatore. Il `vision_radius` dice quanto lontano vede il robottino (3 caselle = vede mezza griglia).
 
 #### `detect(objects, agent_position, target_label)`
 
-Il cuore del detector. Prende la lista degli oggetti, la posizione del robotino,
+Il cuore del detector. Prende la lista degli oggetti, la posizione del robottino,
 e il nome dell'oggetto da cercare.
 
 Cosa fa:
@@ -226,7 +226,7 @@ Semplice!
 
 ---
 
-## `agent.py` — Il cervello del robotino
+## `agent.py` — Il cervello del robottino
 
 Questo modulo implementa **Q-learning**, un algoritmo di apprendimento famoso.
 Immagina una **tabella** (Q-table) con:
@@ -242,7 +242,7 @@ Immagina una **tabella** (Q-table) con:
 
 #### `__init__(actions=4, alpha=0.2, gamma=0.95, epsilon=0.5)`
 
-Prepara il robotino:
+Prepara il robottino:
 - `actions`: 4 mosse possibili (su/giù/sinistra/destra)
 - `alpha` (0.2): "velocità di apprendimento" — quanto velocemente impara dai nuovi dati
 - `gamma` (0.95): "sconto sul futuro" — quanto conta una ricompensa futura rispetto a una immediata
@@ -253,11 +253,11 @@ La Q-table è un `defaultdict`: se chiedi uno stato mai visto, restituisce `[0.0
 
 #### `choose_action(state)` — Decidi la prossima mossa
 
-Il robotino lancia una monetina:
+Il robottino lancia una monetina:
 - Se esce **testa** (probabilità = `epsilon`): sceglie un'azione **a caso** (esplora!)
 - Se esce **croce**: guarda nella Q-table e sceglie l'azione con il **voto più alto** (sfrutta!)
 
-Dopo molti episodi, `epsilon` diventa piccolo e il robotino smette di esplorare,
+Dopo molti episodi, `epsilon` diventa piccolo e il robottino smette di esplorare,
 usando solo quello che ha imparato.
 
 #### `learn(state, action, reward, next_state, done)` — Impara dall'esperienza
@@ -286,7 +286,7 @@ Ad ogni episodio, riduce un po' la voglia di esplorare:
 epsilon = max(0.05, epsilon × 0.997)
 ```
 
-Dopo ~800 episodi, `epsilon` arriva a 0.05 = 5%. Il robotino è diventato "adulto"
+Dopo ~800 episodi, `epsilon` arriva a 0.05 = 5%. Il robottino è diventato "adulto"
 e usa quasi sempre quello che ha imparato.
 
 ---
@@ -321,7 +321,7 @@ Chiamato a ogni passo. Cosa disegna (in ordine):
    - Sedia: **verde**
    - Tavolo: **blu**
    - Lampada: **gialla**
-3. **Robotino**: quadrato bianco leggermente più piccolo
+3. **robottino**: quadrato bianco leggermente più piccolo
 4. **HUD**: un pannello in alto a sinistra con:
    - `TARGET: CHAIR` — cosa deve raggiungere
    - `AGENT: x, y` — posizione corrente
@@ -348,7 +348,7 @@ Disegna `size+1` linee orizzontali e verticali in grigio scuro.
 Ogni oggetto (sedia, tavolo, lampada) viene disegnato come un quadrato
 con un po' di padding (rientro) per non toccare i bordi della casella.
 
-#### `_draw_agent()` — Il robotino bianco
+#### `_draw_agent()` — Il robottino bianco
 
 Un quadrato bianco, con un padding leggermente maggiore per distinguerlo dagli oggetti.
 
@@ -393,39 +393,39 @@ Esempio: la lettera **A**:
 
 ## `main.py` — Il regista
 
-Coordina tutto: addestra il robotino, poi mostra il risultato.
+Coordina tutto: addestra il robottino, poi mostra il risultato.
 
 ### `train_agent(episodes=5000, max_steps=50)`
 
 Il ciclo di addestramento:
 
-1. Crea il mondo (`GridWorldEnv`) e il robotino (`QLearningAgent`)
+1. Crea il mondo (`GridWorldEnv`) e il robottino (`QLearningAgent`)
 2. Per ogni episodio (5000 volte):
    - Ricomincia il mondo con `reset()` (nuove posizioni casuali)
    - Per massimo 50 passi:
-     - Il robotino sceglie un'azione con `choose_action()`
+     - Il robottino sceglie un'azione con `choose_action()`
      - Il mondo esegue l'azione con `step(action)` (si muove o sbatte)
-     - Il robotino impara dall'esperienza con `learn()`
+     - Il robottino impara dall'esperienza con `learn()`
      - Se ha raggiunto la sedia, smette
    - Riduce l'esplorazione con `decay_exploration()`
    - Ogni 50 episodi stampa il progresso
-3. Restituisce il mondo e il robotino addestrato
+3. Restituisce il mondo e il robottino addestrato
 
 ### `run_demo(env, agent, steps=None)`
 
-Mostra il robotino in azione:
+Mostra il robottino in azione:
 1. Crea il renderer (la finestra OpenGL)
-2. **Congela l'esplorazione** (`epsilon = 0.0`): il robotino userà solo ciò che ha imparato
+2. **Congela l'esplorazione** (`epsilon = 0.0`): il robottino userà solo ciò che ha imparato
 3. Per ogni passo:
    - Usa `_choose_action_without_loop()` per scegliere l'azione (evita i loop)
-   - Muove il robotino e disegna la scena
+   - Muove il robottino e disegna la scena
    - Aspetta 0.35 secondi (così si vede il movimento)
    - Se raggiunge la sedia, resetta il mondo
 4. Quando si chiude la finestra, ripristina `epsilon` e pulisce il renderer
 
 ### `_preview_position(env, action)` — Dove finirei?
 
-Calcola dove andrebbe il robotino se eseguisse quell'azione.
+Calcola dove andrebbe il robottino se eseguisse quell'azione.
 Se la casella contiene un ostacolo, restituisce la posizione **corrente** (perché
 il movimento viene bloccato da `step()`).
 
@@ -441,13 +441,13 @@ Una versione "intelligente" di `choose_action` che evita i loop:
    - Se l'azione mi fa tornare indietro (dov'ero un passo fa): **-0.5**
 4. Sceglie l'azione col punteggio più alto
 
-Questo sistema anti-loop è fondamentale: senza di esso, il robotino potrebbe
+Questo sistema anti-loop è fondamentale: senza di esso, il robottino potrebbe
 rimanere intrappolato a fare avanti e indietro (destra → sinistra → destra → sinistra → ...).
 
 ### `main()` — Via!
 
 Unisce tutto:
-1. Addestra il robotino per 5000 episodi
+1. Addestra il robottino per 5000 episodi
 2. Mostra il risultato nella finestra OpenGL
 
 ---
@@ -465,7 +465,7 @@ main()
   │           │
   │           ├─ env.reset()
   │           │     ├─ _sample_positions(4) → 4 caselle senza sovrapposizioni
-  │           │     ├─ Mette il robotino in posizione
+  │           │     ├─ Mette il robottino in posizione
   │           │     ├─ Crea sedia + tavolo + lampada
   │           │     └─ _observation() → stato a 9 cifre
   │           │
@@ -516,14 +516,14 @@ main()
 ### La Q-table
 
 Immagina una **tabella** con migliaia di righe (gli stati possibili) e 4 colonne (le azioni).
-All'inizio tutti i voti sono 0. Il robotino fa cose a caso.
+All'inizio tutti i voti sono 0. Il robottino fa cose a caso.
 
 Dopo aver provato:
 - "Su → sedia!" → voto di SU aumenta (perché ha avuto +1.0)
 - "Giù → ostacolo!" → voto di GIÙ diminuisce (perché ha avuto -1.0)
 - "Su → mi sono avvicinato" → voto di SU aumenta un pochino
 
-Dopo centinaia di episodi, la tabella contiene la **saggezza** del robotino:
+Dopo centinaia di episodi, la tabella contiene la **saggezza** del robottino:
 per ogni situazione, sa qual è la mossa migliore.
 
 ### Le danger flag
@@ -533,9 +533,9 @@ Il trucco più importante: lo stato include 4 numeri che dicono
 
 - Stato = `(3, 4, 0, 1, 1, 0, 0, 1, 0)` + azione = SINISTRA = collisione!
 - `Q([3,4,0,1,1,0,0,1,0], SINISTRA)` diventa negativo
-- Robotino impara: da questo stato, non andare a sinistra!
+- robottino impara: da questo stato, non andare a sinistra!
 
-Se la danger flag non ci fosse, il robotino non saprebbe **perché** ha preso -1.0
+Se la danger flag non ci fosse, il robottino non saprebbe **perché** ha preso -1.0
 quando è andato a sinistra. Con la danger flag, impara ad associare
 "danger_left = 1" con "non andare a sinistra".
 
@@ -543,7 +543,7 @@ quando è andato a sinistra. Con la danger flag, impara ad associare
 
 Collidere con un ostacolo fa **-1.0**, esattamente quanto prendere la sedia fa **+1.0**.
 Questo significa che anche un solo scontro annulla completamente la gioia di aver raggiunto
-il bersaglio. Il robotino impara che **non vale mai la pena** sbattere.
+il bersaglio. Il robottino impara che **non vale mai la pena** sbattere.
 
 ---
 
@@ -559,8 +559,8 @@ il bersaglio. Il robotino impara che **non vale mai la pena** sbattere.
 
 | Posizione | Variabile | Esempio | Cosa dice |
 |-----------|-----------|---------|-----------|
-| 1 | `ax` | 3 | Robotino è alla colonna 3 |
-| 2 | `ay` | 2 | Robotino è alla riga 2 |
+| 1 | `ax` | 3 | robottino è alla colonna 3 |
+| 2 | `ay` | 2 | robottino è alla riga 2 |
 | 3 | `tdx` | 1 | La sedia è a destra |
 | 4 | `tdy` | -1 | La sedia è sotto |
 | 5 | `vis` | 1 | La sedia è visibile |
