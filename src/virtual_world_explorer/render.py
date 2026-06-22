@@ -7,12 +7,13 @@ import os
 import glfw
 from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT,
-    GL_DEPTH_BUFFER_BIT,  # Per gestire la profondità 3D
-    GL_DEPTH_TEST,        # Evita che gli oggetti dietro si sovrappongano davanti
+    GL_DEPTH_BUFFER_BIT,
+    GL_DEPTH_TEST,
     GL_LINES,
     GL_MODELVIEW,
     GL_PROJECTION,
-    GL_QUADS,             # Per disegnare le facce dei cubi e pannelli
+    GL_QUADS,
+    GL_TRIANGLES,
     glDisable,
     glEnable,
     glBegin,
@@ -25,11 +26,15 @@ from OpenGL.GL import (
     glOrtho,
     glRectf,
     glVertex2f,
-    glVertex3f,           # Coordinate 3D (X, Y, Z)
+    glVertex3f,
     glViewport,
-    glFrustum,            # Sostituisce gluPerspective in modo nativo
-    glRotatef,            # Ruota la scena per inclinarla
-    glTranslatef,         # Sposta la telecamera
+    glFrustum,
+    glRotatef,
+    glTranslatef,
+    glScalef,
+    glPushMatrix,
+    glPopMatrix,
+    glNormal3f,
     GL_TEXTURE_2D,
     GL_RGBA,
     GL_UNSIGNED_BYTE,
@@ -45,15 +50,29 @@ from OpenGL.GL import (
     glTexParameterf,
     glTexCoord2f,
     glBlendFunc,
-    glReadPixels,         # Per catturare i pixel dello schermo
+    glReadPixels,
     GL_RGB,
+    GL_LIGHTING,
+    GL_LIGHT0,
+    GL_POSITION,
+    GL_AMBIENT,
+    GL_DIFFUSE,
+    GL_SPECULAR,
+    GL_NORMALIZE,
+    glLightfv,
+    glMaterialfv,
+    GL_FRONT,
+    GL_AMBIENT_AND_DIFFUSE,
+    GL_FLAT,
+    GL_SMOOTH,
+    glShadeModel,
 )
 
-# Usiamo PIL e NumPy per manipolare le immagini e i frame catturati
 from PIL import Image
 import numpy as np
 
 from .env import GridWorldEnv
+from .model3d import Model3D
 
 
 @dataclass(frozen=True)
@@ -70,8 +89,7 @@ class OpenGLRenderer:
         self.env = env
         self.config = config or RendererConfig()
         self.window = None
-        # Dizionario che conterrà i puntatori (ID) alle texture caricate in memoria grafica
-        self.textures: dict[str, int] = {}
+        self.models: dict[str, Model3D] = {}
 
     def initialize(self) -> None:
         if not glfw.init():
@@ -83,44 +101,43 @@ class OpenGLRenderer:
             raise RuntimeError("Failed to create the OpenGL window")
         glfw.make_context_current(self.window)
         glViewport(0, 0, self.config.window_size, self.config.window_size)
-        
-        # Abilitiamo il controllo della profondità hardware per il 3D
+
         glEnable(GL_DEPTH_TEST)
-        
-        # Abilitiamo la trasparenza (Alpha Blending) fondamentale per i billboard scontrornati
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        
+
         glClearColor(0.08, 0.08, 0.1, 1.0)
 
-        # Carichiamo le texture per i tre oggetti del mondo
-        self.textures["chair"] = self._load_texture_from_file("assets/chair.png", (0.0, 1.0, 0.0)) # Backup verde
-        self.textures["table"] = self._load_texture_from_file("assets/table.png", (0.0, 0.0, 1.0)) # Backup blu
-        self.textures["lamp"] = self._load_texture_from_file("assets/lamp.png", (1.0, 0.0, 0.0))  # Backup rosso
+        glEnable(GL_LIGHTING)
+        glEnable(GL_LIGHT0)
+        glEnable(GL_NORMALIZE)
+        glShadeModel(GL_SMOOTH)
 
-    def _load_texture_from_file(self, filename: str, backup_color: tuple[float, float, float]) -> int:
-        """Carica un'immagine da file e restituisce l'ID della texture OpenGL.
-        Se il file non esiste, genera un pixel a tinta unita del colore di backup."""
-        texture_id = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture_id)
-        
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        
-        if os.path.exists(filename):
-            try:
-                img = Image.open(filename).convert("RGBA")
-                img_data = img.tobytes("raw", "RGBA", 0, -1)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.width, img.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data)
-                print(f"[Texture] Caricata con successo l'immagine: {filename}")
-                return texture_id
-            except Exception as e:
-                print(f"[Texture] Errore nel caricamento di {filename}: {e}. Uso il backup colorato.")
-        
-        r, g, b = [int(c * 255) for c in backup_color]
-        fallback_data = bytes([r, g, b, 255])
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, fallback_data)
-        return texture_id
+        light_ambient = [0.25, 0.25, 0.3, 1.0]
+        light_diffuse = [0.9, 0.9, 0.95, 1.0]
+        light_position = [5.0, 5.0, 15.0, 1.0]
+        glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient)
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse)
+        glLightfv(GL_LIGHT0, GL_POSITION, light_position)
+
+        model_paths = {
+            "chair": "assets/models/chair/Chair.obj",
+            "lamp": "assets/models/lamp/Standing_lamp_01.obj",
+            "table": "assets/models/table/model.obj",
+        }
+        for label, path in model_paths.items():
+            if os.path.exists(path):
+                model = Model3D(path)
+                model.load_textures_gl()
+                self.models[label] = model
+                print(f"[Model3D] Caricato: {path} ({len(model.vertices)} vertici, {sum(len(g.faces) for g in model.face_groups)} facce)")
+            else:
+                print(f"[Model3D] WARNING: {path} non trovato")
+
+    @staticmethod
+    def _set_material(diffuse: tuple[float, float, float]) -> None:
+        ambient = (diffuse[0] * 0.3, diffuse[1] * 0.3, diffuse[2] * 0.3)
+        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, [*diffuse, 1.0])
 
     def capture_frame(self) -> np.ndarray:
         """Cattura lo schermo corrente renderizzato in memoria e lo restituisce come array NumPy RGB."""
@@ -199,64 +216,73 @@ class OpenGLRenderer:
         glEnd()
 
     def _draw_cube(self, x: float, y: float, size: float) -> None:
-        """Disegna un cubo solido 3D riga per riga sul piano (usato per l'agente)."""
         z_bottom = 0.0
         z_top = size
         glBegin(GL_QUADS)
-        # Faccia superiore
+        # Superiore (normale +Z)
+        glNormal3f(0, 0, 1)
         glVertex3f(x, y, z_top)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x, y + size, z_top)
-        # Faccia inferiore
+        # Inferiore (normale -Z)
+        glNormal3f(0, 0, -1)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
-        glVertex3f(x + size, y + size, z_bottom)
-        # Faccia frontale
+        glVertex3f(x + size, y, z_bottom)
+        # Frontale (normale -Y)
+        glNormal3f(0, -1, 0)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x, y, z_top)
-        # Faccia destra
+        # Destra (normale +X)
+        glNormal3f(1, 0, 0)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x + size, y, z_top)
-        # Faccia posteriore
+        # Posteriore (normale +Y)
+        glNormal3f(0, 1, 0)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y + size, z_top)
         glVertex3f(x + size, y + size, z_top)
-        # Faccia sinistra
+        # Sinistra (normale -X)
+        glNormal3f(-1, 0, 0)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y, z_bottom)
-        glVertex3f(x, y + size, z_top)
+        glVertex3f(x, y, z_top)
         glVertex3f(x, y + size, z_top)
         glEnd()
-
-    def _draw_billboard(self, x: float, y: float, size: float, texture_id: int) -> None:
-        glEnable(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, texture_id)
-        glColor3f(1.0, 1.0, 1.0)
-        glBegin(GL_QUADS)
-        glTexCoord2f(0.0, 0.0); glVertex3f(x, y + size/2, 0.0)
-        glTexCoord2f(1.0, 0.0); glVertex3f(x + size, y + size/2, 0.0)
-        glTexCoord2f(1.0, 1.0); glVertex3f(x + size, y + size/2, size)
-        glTexCoord2f(0.0, 1.0); glVertex3f(x, y + size/2, size)
-        glEnd()
-        glDisable(GL_TEXTURE_2D)
 
     def _draw_objects(self) -> None:
-        padding = self.config.cell_padding
+        model_scale = 0.55
         for scene_object in self.env.objects:
-            side = 1.0 - (padding * 2)
-            tex_id = self.textures.get(scene_object.label, 0)
-            self._draw_billboard(scene_object.x + padding, scene_object.y + padding, side, tex_id)
+            model = self.models.get(scene_object.label)
+            if model is None:
+                continue
+
+            glPushMatrix()
+            glTranslatef(scene_object.x + 0.5, scene_object.y + 0.5, 0.0)
+
+            mat_colors = [m.diffuse for m in model.materials.values()]
+            if mat_colors:
+                avg_color = (
+                    sum(c[0] for c in mat_colors) / len(mat_colors),
+                    sum(c[1] for c in mat_colors) / len(mat_colors),
+                    sum(c[2] for c in mat_colors) / len(mat_colors),
+                )
+                self._set_material(avg_color)
+
+            model.render(target_size=model_scale)
+            glPopMatrix()
 
     def _draw_agent(self) -> None:
         padding = self.config.cell_padding + 0.04
-        glColor3f(0.95, 0.95, 0.95)
+        glDisable(GL_TEXTURE_2D)
+        self._set_material((0.95, 0.95, 0.95))
         side = 1.0 - (padding * 2)
         self._draw_cube(self.env.agent_x + padding, self.env.agent_y + padding, side)
 
@@ -265,6 +291,7 @@ class OpenGLRenderer:
             return
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_TEXTURE_2D)
+        glDisable(GL_LIGHTING)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         glOrtho(0, self.config.window_size, 0, self.config.window_size, -1, 1)
@@ -279,6 +306,7 @@ class OpenGLRenderer:
         for index, line in enumerate(lines):
             self._draw_text(start_x + 6.0, start_y - index * self.config.hud_line_height, line, self.config.hud_scale)
         glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
 
     def _draw_text(self, x: float, y: float, text: str, scale: float) -> None:
         cursor_x = x
