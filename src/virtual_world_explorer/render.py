@@ -18,6 +18,8 @@ from OpenGL.GL import (
     glEnable,
     glBegin,
     glClear,
+    glPixelStorei,
+    GL_PACK_ALIGNMENT,
     glClearColor,
     glColor3f,
     glEnd,
@@ -59,13 +61,16 @@ from OpenGL.GL import (
     GL_DIFFUSE,
     GL_SPECULAR,
     GL_NORMALIZE,
-    glLightfv,
-    glMaterialfv,
-    GL_FRONT,
+    GL_DIFFUSE,
+    GL_SPECULAR,
+    GL_FRONT_AND_BACK,
     GL_AMBIENT_AND_DIFFUSE,
+    glMaterialfv,
+    glLightfv,
     GL_FLAT,
     GL_SMOOTH,
     glShadeModel,
+    GL_FRONT,
 )
 
 from PIL import Image
@@ -88,7 +93,7 @@ class OpenGLRenderer:
     def __init__(self, env: GridWorldEnv, config: RendererConfig | None = None) -> None:
         self.env = env
         self.config = config or RendererConfig()
-        self.window = None
+        self.window: Any | None = None
         self.models: dict[str, Model3D] = {}
 
     def initialize(self) -> None:
@@ -130,7 +135,9 @@ class OpenGLRenderer:
                 model = Model3D(path)
                 model.load_textures_gl()
                 self.models[label] = model
-                print(f"[Model3D] Caricato: {path} ({len(model.vertices)} vertici, {sum(len(g.faces) for g in model.face_groups)} facce)")
+                v_count = sum(len(g['vertices']) for g in model.geometries)
+                f_count = sum(len(g['faces']) for g in model.geometries)
+                print(f"[Model3D] Caricato: {path} ({v_count} vertici, {f_count} facce)")
             else:
                 print(f"[Model3D] WARNING: {path} non trovato")
 
@@ -139,25 +146,23 @@ class OpenGLRenderer:
         ambient = (diffuse[0] * 0.3, diffuse[1] * 0.3, diffuse[2] * 0.3)
         glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, [*diffuse, 1.0])
 
-    def capture_frame(self) -> np.ndarray:
-        """Cattura lo schermo corrente renderizzato in memoria e lo restituisce come array NumPy RGB."""
+    def capture_frame(self) -> np.ndarray | None:
+        """Cattura la visuale egocentrica per OWL-ViT."""
         if self.window is None:
-            return np.zeros((self.config.window_size, self.config.window_size, 3), dtype=np.uint8)
+            return None
+            
+        # Draw the egocentric view for OWL-ViT to the back buffer
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        self._setup_camera(egocentric=True)
+        self._draw_grid()
+        self._draw_objects()
+        self._draw_agent()
         
-        width = self.config.window_size
-        height = self.config.window_size
-        
-        # Leggiamo i pixel RGB direttamente dal buffer della scheda video
-        glPixelStorei = 1 # Forza l'allineamento dei byte
-        pixels = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
-        
-        # Convertiamo i dati binari in un array NumPy ordinato (Altezza, Larghezza, Canali)
-        image_array = np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3)
-        
-        # OpenGL renderizza dal basso verso l'alto (0,0 in basso a sinistra), 
-        # le immagini standard vanno dall'alto in basso. Quindi ribaltiamo verticalmente l'array.
+        width, height = self.config.window_size, self.config.window_size
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
+        image_array = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
         image_array = np.flipud(image_array)
-        
         return image_array
 
     def should_close(self) -> bool:
@@ -170,25 +175,11 @@ class OpenGLRenderer:
     def draw(self) -> None:
         if self.window is None:
             return
+            
+        glfw.poll_events()
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        
-        fov = 45.0
-        near_val = 0.1
-        far_val = 50.0
-        top = near_val * math.tan(math.radians(fov / 2.0))
-        right = top
-        glFrustum(-right, right, -top, top, near_val, far_val)
-        
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        
-        glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
-        glRotatef(-55.0, 1.0, 0.0, 0.0)
-        
+        self._setup_camera(egocentric=False)
         self._draw_grid()
         self._draw_objects()
         self._draw_agent()
@@ -199,6 +190,35 @@ class OpenGLRenderer:
             f"VISIBLE: {self.env.detector.detect(self.env.objects, (self.env.agent_x, self.env.agent_y), self.env.target_label).visible}",
         ])
         glfw.swap_buffers(self.window)
+
+    def _setup_camera(self, egocentric: bool) -> None:
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        
+        near_val = 0.1
+        far_val = 50.0
+        
+        if egocentric:
+            # Proiezione ortografica ristretta per la telecamera dell'IA:
+            # - Il raggio visivo è limitato a circa 3 blocchi (view_size = 3.5).
+            # - Se il target è oltre questo raggio, non viene disegnato nell'immagine.
+            view_size = 3.5
+            glOrtho(-view_size, view_size, -view_size, view_size, near_val, far_val)
+        else:
+            fov = 45.0
+            top = near_val * math.tan(math.radians(fov / 2.0))
+            right = top
+            glFrustum(-right, right, -top, top, near_val, far_val)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        
+        if egocentric:
+            glTranslatef(-(self.env.agent_x + 0.5), -(self.env.agent_y + 0.5), -self.env.size * 1.5)
+        else:
+            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
+            
+        glRotatef(-55.0, 1.0, 0.0, 0.0)
 
     def shutdown(self) -> None:
         if self.window is not None:

@@ -8,12 +8,14 @@ State = tuple[int, ...]
 
 
 class QLearningAgent:
-    def __init__(self, actions: int = 4, alpha: float = 0.2, gamma: float = 0.95, epsilon: float = 0.5) -> None:
+    def __init__(self, actions: int = 4, alpha: float = 0.1, gamma: float = 0.9, epsilon: float = 1.0) -> None:
         self.actions = actions
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.random = random.Random(13)
+        # Inizializziamo a 0.0 invece che 1.0 per evitare che le azioni inesplorate
+        # sembrino migliori di quelle che portano al target (che valgono meno di 1.0 a causa del discount).
         self.q_values = defaultdict(lambda: [0.0 for _ in range(self.actions)])
 
     def choose_action(self, state: State) -> int:

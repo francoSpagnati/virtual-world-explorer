@@ -28,10 +28,11 @@ virtual-world-explorer/
 │   ├── __init__.py          — Marcatore package
 │   ├── main.py              — Entry point, training loop, demo loop
 │   ├── render.py            — Renderer 3D OpenGL (prospettico, modelli 3D, cubo agente, HUD, luci)
-│   ├── model3d.py           — Parser OBJ/MTL + rendering OpenGL immediate mode
+│   ├── model3d.py           — Caricamento OBJ via trimesh + rendering OpenGL immediate mode
 │   ├── env.py               — Ambiente GridWorld (griglia 7×7, oggetti scena, step/reset)
 │   ├── agent.py             — Agente Q-learning tabellare
-│   └── detector.py          — Sensore semantico (direzione target con portata limitata)
+│   ├── detector.py          — Sensore semantico base (griglia)
+│   └── owl_vision.py        — Integrazione visiva con OWL-ViT (Zero-Shot Object Detection)
 ├── assets/
 │   ├── models/
 │   │   ├── chair/
@@ -62,10 +63,11 @@ virtual-world-explorer/
 
 | Funzione | Cosa fa |
 |---|---|
-| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 5000 episodi di addestramento. Restituisce ambiente e agente addestrato. |
-| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop: sceglie azione, chiama `renderer.draw()`, resetta quando raggiunge sedia. |
+| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 5000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
+| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. Può attivare `owl_worker` in background tramite il flag `USE_OWL_VISION`. |
+| `owl_worker()` | Thread in background che legge i frame catturati da OpenGL, esegue l'inferenza asincrona di OWL-ViT, e aggiorna lo stato visivo globale senza bloccare il rendering. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
-| `_choose_action_without_loop()` | Azione greedy con anti-loop: penalizza stare fermo, revisitare posizioni recenti, rimbalzi avanti-indietro. |
+| `_choose_action_without_loop()` | Azione greedy con logica anti-loop dinamica a memoria lunga (penalizza massicciamente celle visitate negli ultimi 20 passi). |
 
 ### `render.py` — Il cuore del 3D
 
@@ -73,11 +75,11 @@ virtual-world-explorer/
 
 | Componente | 2D (prima) | 3D (ora) |
 |---|---|---|
-| Proiezione | `glOrtho` (ortografica) | `glFrustum` (prospettica, 45° FOV) |
+| Proiezione | `glOrtho` (ortografica) | Doppia: `glFrustum` (utente), `glOrtho` (AI) |
 | Profondità | Nessuna | `GL_DEPTH_TEST`, `GL_DEPTH_BUFFER_BIT` |
 | Agente | `glRectf` (quadrato 2D) | `_draw_cube()` (6 `GL_QUADS` + normals → cubo 3D con luce) |
 | Oggetti | `glRectf` colorati | Modelli 3D OBJ (da 60 a 394 facce) con texture o materiali MTL |
-| Camera | Dall'alto (top-down) | Traslata + ruotata (-55° su X) — isometrica |
+| Camera | Dall'alto (top-down) | Doppia: Fissa inclinata (-55° su X) per utente, Egocentrica per AI |
 | Illuminazione | Nessuna | `GL_LIGHT0` + `GL_NORMALIZE` + `glMaterialfv` |
 | Formati | Nessuno | OBJ + MTL + PNG texture |
 | Trasparenza | Nessuna | `GL_BLEND` + `GL_SRC_ALPHA` |
@@ -95,11 +97,11 @@ virtual-world-explorer/
 | `_draw_agent()` | Imposta materiale bianco, disegna cubo agente |
 | `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità) |
 | `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf` |
-| `capture_frame()` | Legge framebuffer con `glReadPixels`, restituisce array NumPy RGB |
+| `capture_frame()` | Renderizza in back-buffer la visuale *egocentrica ortografica* dell'AI e restituisce array NumPy RGB |
 
-### `model3d.py` — Parser OBJ/MTL + rendering 3D
+### `model3d.py` — Rendering 3D con trimesh
 
-Carica modelli 3D dal formato OBJ senza librerie esterne (solo OpenGL raw). Rispetta il vincolo GFX-only.
+Delega il caricamento dei modelli 3D e dei materiali alla libreria `trimesh`, mantenendo però il rendering in OpenGL raw (immediate mode). Rispetta il vincolo GFX-only.
 
 **Classi:**
 
@@ -107,25 +109,11 @@ Carica modelli 3D dal formato OBJ senza librerie esterne (solo OpenGL raw). Risp
 |---|---|
 | `Material` | Dataclass: nome, colore diffuse (Kd), ambient (Ka), path texture, ID texture OpenGL |
 | `FaceGroup` | Gruppo di facce con un materiale associato |
-| `Model3D(path)` | Costruttore: parse OBJ + MTL, calcola bounding box |
+| `Model3D(path)` | Costruttore: carica mesh/scene con trimesh, estrae vertici, facce e materiali. |
 | `load_textures_gl()` | Carica texture PNG in VRAM per ogni materiale che ne ha una |
 | `render(target_size)` | Disegna modello in immediate mode: centra, scala, applica materiali/texture, normali per illuminazione |
 
-**Formati OBJ supportati:**
-- `v x y z` — vertici
-- `vt u v` — coordinate texture (opzionali)
-- `vn x y z` — normali
-- `f v/vt/vn v/vt/vn v/vt/vn [v/vt/vn]` — facce quad/tri con o senza texture coord
-- `usemtl name` — cambio materiale
-- `mtllib file.mtl` — riferimento al materiale
-
-**Formati MTL supportati:**
-- `newmtl name` — definizione materiale
-- `Kd r g b` — colore diffuse
-- `Ka r g b` — colore ambient
-- `map_Kd filename.png` — texture diffuse
-
-**Coordinate:** Converte da Y-up (OBJ) a Z-up (scena OpenGL): `(x, y, z) → (x, z, y)`. Centra il modello in X/Y, lo appoggia a Z=0 (base del modello sul piano della griglia). Scala uniformemente per entro `target_size` (default 0.55).
+La libreria `trimesh` gestisce automaticamente il caricamento di texture, colori base, normali e facce. Il modulo `model3d.py` provvede poi a convertire i dati estratti dal sistema Y-up al sistema Z-up utilizzato da OpenGL nella scena (`(x, y, z) → (x, z, y)`), e ad applicare il corretto ridimensionamento proporzionale (bounding box scalato a `target_size`, default 0.55).
 
 ### `env.py` — L'ambiente
 
@@ -139,11 +127,12 @@ Carica modelli 3D dal formato OBJ senza librerie esterne (solo OpenGL raw). Risp
 | `_sample_positions(n)` | Sceglie `n` posizioni casuali non sovrapposte sulla griglia |
 | `_manhattan_distance()` | Distanza L1 (euristica) |
 
-**Observation** (9 valori):
+**Observation** (7 valori):
 ```
-(x_agente, y_agente, dx_sedia, dy_sedia, visible_flag,
+(dx_sedia, dy_sedia, visible_flag,
  pericolo_su, pericolo_giù, pericolo_sinistra, pericolo_destra)
 ```
+Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza traslazionale e abbattere radicalmente lo spazio degli stati.
 
 ### `agent.py` — L'apprendista
 
@@ -153,17 +142,26 @@ Carica modelli 3D dal formato OBJ senza librerie esterne (solo OpenGL raw). Risp
 | `learn(state, action, reward, next_state, done)` | `Q[s][a] += α * (reward + γ * max(Q[s']) - Q[s][a])` |
 | `decay_exploration(min=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** α=0.1, γ=0.9, ε iniziale=1.0.
+**Iperparametri:** α=0.1, γ=0.9, ε iniziale=1.0. Inizializzazione ottimistica dei Q-values a 1.0 per forzare l'esplorazione profonda degli stati.
 
 ### `detector.py` — Gli occhi dell'agente
 
 | Classe / Funzione | Cosa fa |
 |---|---|
 | `Detection` | Dataclass: `label`, `dx`, `dy`, `visible` |
-| `SemanticDetector` | Sensore visivo a portata limitata |
-| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 3), restituisce direzione normalizzata (dx ∈ {-1,0,1}, dy ∈ {-1,0,1}) e `visible=True`. Altrimenti `visible=False`, direzione zero |
+| `SemanticDetector` | Sensore semantico |
+| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 10 per coprire tutta la griglia), restituisce direzione normalizzata (dx ∈ {-1,0,1}, dy ∈ {-1,0,1}) e `visible=True`. Altrimenti `visible=False`, direzione zero |
 
 **Cosa vede l'agente:** non l'immagine 3D, ma una direzione astratta. Il 3D è solo per l'occhio umano.
+
+### `owl_vision.py` — La vista basata su Deep Learning
+
+| Classe / Metodo | Cosa fa |
+|---|---|
+| `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace. |
+| `detect_target(image, target_name)` | Prende un'immagine ortografica, esegue l'inferenza zero-shot di OWL-ViT, calcola la bounding box, e restituisce `dx`, `dy`, `visible` in base a dove si trova il centro rispetto al centro dello schermo. Usa una confidenza bassa (0.005) per ovviare alla ridotta dimensione dei modelli nella visuale dall'alto. |
+
+**Nota Architetturale:** OWL-ViT è usato **solo** durante la fase di demo visiva, in asincrono. Per fornire ad OWL-ViT una percezione non distorta, `render.py` produce per l'AI una visuale *egocentrica e ortografica*, dove le relazioni di pixel combaciano perfettamente con i vettori direzionali 3D.
 
 ---
 

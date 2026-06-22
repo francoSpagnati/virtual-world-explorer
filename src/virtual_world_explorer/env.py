@@ -31,7 +31,7 @@ class GridWorldEnv:
         self.agent_y = 0
         self.objects: list[SceneObject] = []
 
-    def reset(self) -> tuple[int, int, int, int, int, int, int, int, int]:
+    def reset(self) -> tuple[int, int, int, int, int, int, int]:
         positions = self._sample_positions(4)
         self.agent_x, self.agent_y = positions[0]
         object_specs = [
@@ -45,7 +45,7 @@ class GridWorldEnv:
         ]
         return self._observation()
 
-    def step(self, action: Action) -> tuple[tuple[int, int, int, int, int, int, int, int, int], float, bool, dict[str, object]]:
+    def step(self, action: Action) -> tuple[tuple[int, int, int, int, int, int, int], float, bool, dict[str, object]]:
         target = self._target_object()
         previous_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
         previous_position = (self.agent_x, self.agent_y)
@@ -72,16 +72,18 @@ class GridWorldEnv:
             self.agent_x, self.agent_y = new_x, new_y
             current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
             done = self.agent_x == target.x and self.agent_y == target.y
-            reward = -0.01 + 0.02 * (previous_distance - current_distance)
+            
+            # Forte penalità per ogni passo per incoraggiare percorsi brevi
+            reward = -0.1 + 0.05 * (previous_distance - current_distance)
             if previous_position == (self.agent_x, self.agent_y):
-                reward -= 0.03
+                reward -= 0.2
             if done:
                 reward = 1.0
 
         info = {"target_label": target.label, "target_position": (target.x, target.y)}
         return self._observation(), reward, done, info
 
-    def _observation(self) -> tuple[int, int, int, int, int, int, int, int, int]:
+    def _observation(self) -> tuple[int, int, int, int, int, int, int]:
         detection = self.detector.detect(self.objects, (self.agent_x, self.agent_y), self.target_label)
         danger_up = int(any(
             obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y - 1
@@ -100,7 +102,6 @@ class GridWorldEnv:
             for obj in self.objects
         ))
         return (
-            self.agent_x, self.agent_y,
             detection.dx, detection.dy, int(detection.visible),
             danger_up, danger_down, danger_left, danger_right,
         )
