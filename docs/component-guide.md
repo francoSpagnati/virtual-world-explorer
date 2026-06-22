@@ -64,10 +64,10 @@ virtual-world-explorer/
 | Funzione | Cosa fa |
 |---|---|
 | `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 5000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
-| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. Può attivare `owl_worker` in background tramite il flag `USE_OWL_VISION`. |
-| `owl_worker()` | Thread in background che legge i frame catturati da OpenGL, esegue l'inferenza asincrona di OWL-ViT, e aggiorna lo stato visivo globale senza bloccare il rendering. |
+| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. |
+| `owl_worker()` | Thread in background che calcola l'inferenza di OWL-ViT. Ora il `main` aspetta *sincronamente* il suo responso per azzerare la latenza visiva, permettendo al contempo a OpenGL di non bloccarsi. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
-| `_choose_action_without_loop()` | Azione greedy con logica anti-loop dinamica a memoria lunga (penalizza massicciamente celle visitate negli ultimi 20 passi). |
+| `_choose_action_without_loop()` | Azione greedy dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e penalità per mosse cicliche. |
 
 ### `render.py` — Il cuore del 3D
 
@@ -142,7 +142,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | `learn(state, action, reward, next_state, done)` | `Q[s][a] += α * (reward + γ * max(Q[s']) - Q[s][a])` |
 | `decay_exploration(min=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** α=0.1, γ=0.9, ε iniziale=1.0. Inizializzazione ottimistica dei Q-values a 1.0 per forzare l'esplorazione profonda degli stati.
+**Iperparametri:** α=0.1, γ=0.9, ε iniziale=1.0. Inizializzazione **pessimistica** dei Q-values a `0.0` (anziché 1.0) per impedire che le azioni inesplorate dominino sulle azioni utili che hanno un discount factor applicato. Limite massimo di 30 passi per episodio.
 
 ### `detector.py` — Gli occhi dell'agente
 
@@ -159,9 +159,9 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | Classe / Metodo | Cosa fa |
 |---|---|
 | `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace. |
-| `detect_target(image, target_name)` | Prende un'immagine ortografica, esegue l'inferenza zero-shot di OWL-ViT, calcola la bounding box, e restituisce `dx`, `dy`, `visible` in base a dove si trova il centro rispetto al centro dello schermo. Usa una confidenza bassa (0.005) per ovviare alla ridotta dimensione dei modelli nella visuale dall'alto. |
+| `detect_target(image, target_name)` | Prende un'immagine ortografica, esegue l'inferenza zero-shot di OWL-ViT, calcola la bounding box, e restituisce `dx`, `dy`, `visible`. Usa confidenza a 0.02. |
 
-**Nota Architetturale:** OWL-ViT è usato **solo** durante la fase di demo visiva, in asincrono. Per fornire ad OWL-ViT una percezione non distorta, `render.py` produce per l'AI una visuale *egocentrica e ortografica*, dove le relazioni di pixel combaciano perfettamente con i vettori direzionali 3D.
+**Nota Architetturale Sulla Latenza:** Inizialmente OWL-ViT girava in modo puramente asincrono causando uno sfasamento cognitivo (l'agente elaborava immagini di 3 passi fa e ignorava gli ostacoli vicini). Ora l'integrazione è **sincrona rispetto al movimento**: l'agente attende fisicamente ("congela") che il modello visivo processi il frame del suo esatto step attuale, prima di decidere l'azione, eliminando errori di posizionamento ed eseguendo un *detect* chirurgico appena il bersaglio entra nel campo visivo ravvicinato di 3 blocchi.
 
 ---
 

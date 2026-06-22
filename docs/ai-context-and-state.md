@@ -16,14 +16,14 @@ Il rendering *deve* avvenire manipolando direttamente lo stato OpenGL tramite `P
 
 ## 3. Stato Attuale del Progetto (Configurazione)
 Il progetto è in uno stato avanzato e pienamente funzionante, configurato come segue:
-- **Agente RL:** `agent.py` utilizza Q-Learning con inizializzazione ottimistica (`Q=1.0`) e decrescita rigida per forzare l'esplorazione nei primi episodi.
+- **Agente RL (Tuning):** `agent.py` utilizza Q-Learning. La Q-table è ora inizializzata a `0.0` (anziché ottimisticamente a 1.0) per evitare che il discount factor renda l'azione vincente "peggiore" delle azioni inesplorate. Il limite di esplorazione è stato ridotto a 30 mosse e le penalità per i passi a vuoto sono state decuplicate (`-0.1`) per forzare percorsi diretti e perfetti.
 - **Spazio di Stato Ottimizzato (7-D):** L'agente percepisce il mondo tramite una tupla relativa: `(dx_target, dy_target, visible, danger_up, danger_down, danger_left, danger_right)`. Le coordinate assolute sono state rimosse.
-- **Sensore Logico (Detector):** Durante il training, la `vision_radius` è impostata a 10 (visione infinita) per permettere all'agente di imparare il pathing ottimale da ogni cella in 5000 episodi senza perdersi in wandering casuale.
+- **Sensore Logico & Momentum:** `vision_radius` è impostata a 3 (limitata). Quando l'agente non vede la sedia (visible=0), usa una logica di "Momentum" (`last_action` in `main.py`) per muoversi in linee rette veloci come un Roomba, esplorando la mappa senza perdersi in wandering casuali. Appena `visible=1`, il momentum si disattiva e l'agente obbedisce ciecamente alla Q-table per colpire il target.
 - **Motore 3D a Doppia Telecamera:** `render.py` adotta un'ingegnosa architettura dual-camera. Ad ogni step renderizza la scena due volte:
   1. *Per l'Utente:* Una telecamera fissa prospettica (`glFrustum`), visivamente stabile e piacevole.
-  2. *Per OWL-ViT:* Una telecamera egocentrica ortografica (`glOrtho`) nascosta nel back-buffer, che segue l'agente. Questo elimina la distorsione prospettica, assicurando che le coordinate 2D dell'immagine corrispondano perfettamente ai vettori direzionali 3D.
-- **Visione Artificiale (OWL-ViT):** Il modulo `owl_vision.py` utilizza il modello foundation OWL-ViT per dedurre la direzione del target (`dx, dy`) puramente guardando il rendering ortografico. Inferisce in un thread in background. La soglia di confidenza è bassa (0.005) per gestire modelli renderizzati a basse risoluzioni senza falsi negativi.
-- **Esecuzione:** `main.py` orchestra prima il training dell'agente e successivamente lancia una Demo 3D visiva, integrando OWL-ViT tramite una coda thread-safe.
+  2. *Per OWL-ViT:* Una telecamera egocentrica ortografica (`glOrtho`) limitata a un raggio visivo di 3 blocchi (uguale al sensore logico). Questo elimina la distorsione prospettica.
+- **Visione Artificiale (OWL-ViT Sincrona):** Il modulo `owl_vision.py` deduce la direzione. A differenza di prima, l'inferenza è ora strettamente **sincrona** rispetto allo step del motore: il loop principale di `main.py` "congela" l'agente finché OWL-ViT non restituisce il risultato, azzerando la latenza ed evitando che l'agente superi i target mentre aspetta il processamento asincrono. La finestra OpenGL è mantenuta responsiva tramite `poll()`.
+- **Esecuzione:** `main.py` orchestra prima il training dell'agente e successivamente lancia una Demo 3D visiva. Al lancio, la simulazione attende il caricamento dei pesi OWL-ViT prima di permettere il primo passo.
 
 ## 4. Cosa Manca / Prossimi Passi
 Per completare la visione finale e raggiungere l'obiettivo del progetto, mancano le seguenti espansioni:
