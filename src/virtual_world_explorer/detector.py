@@ -16,7 +16,7 @@ class SemanticDetector:
         self.vision_radius = vision_radius
 
     def detect(self, objects: list[object], agent_position: tuple[int, int], target_label: str) -> Detection:
-        target = None
+        target: object | None = None
         for scene_object in objects:
             if getattr(scene_object, "label", None) == target_label:
                 target = scene_object
@@ -26,13 +26,13 @@ class SemanticDetector:
             raise RuntimeError(f"Target object '{target_label}' is missing from the scene")
 
         agent_x, agent_y = agent_position
-        dx = target.x - agent_x
-        dy = target.y - agent_y
+        dx = getattr(target, "x", 0) - agent_x
+        dy = getattr(target, "y", 0) - agent_y
         visible = abs(dx) <= self.vision_radius and abs(dy) <= self.vision_radius
         if not visible:
-            return Detection(label=target.label, dx=0, dy=0, visible=False)
+            return Detection(label=getattr(target, "label", ""), dx=0, dy=0, visible=False)
 
-        return Detection(label=target.label, dx=self._sign(dx), dy=self._sign(dy), visible=True)
+        return Detection(label=getattr(target, "label", ""), dx=self._sign(dx), dy=self._sign(dy), visible=True)
 
     @staticmethod
     def _sign(value: int) -> int:

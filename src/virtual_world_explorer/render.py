@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import glfw
 from OpenGL.GL import (
@@ -76,7 +77,7 @@ class OpenGLRenderer:
         self._draw_hud_overlay([
             f"TARGET: {self.env.target_label.upper()}",
             f"AGENT: {self.env.agent_x}, {self.env.agent_y}",
-            f"VISIBLE: {self.env.detector.detect(self.env.objects, (self.env.agent_x, self.env.agent_y), self.env.target_label).visible}",
+            f"VISIBLE: {self.env.detector.detect(cast(list[object], self.env.objects), (self.env.agent_x, self.env.agent_y), self.env.target_label).visible}",
         ])
         glfw.swap_buffers(self.window)
 

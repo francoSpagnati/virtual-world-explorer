@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import random
+from typing import Sequence, cast
 
 from .detector import Detection, SemanticDetector
 
@@ -82,7 +83,7 @@ class GridWorldEnv:
         return self._observation(), reward, done, info
 
     def _observation(self) -> tuple[int, int, int, int, int, int, int, int, int]:
-        detection = self.detector.detect(self.objects, (self.agent_x, self.agent_y), self.target_label)
+        detection = self.detector.detect(cast(list[object], self.objects), (self.agent_x, self.agent_y), self.target_label)
         danger_up = int(any(
             obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y - 1
             for obj in self.objects
