@@ -5,6 +5,7 @@ import math
 import os
 
 import glfw
+from typing import Any
 from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT,
     GL_DEPTH_BUFFER_BIT,
