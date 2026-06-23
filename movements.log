@@ -1,0 +1,10 @@
+=== Simulation Movements Log ===
+[Sim] Agent: (3, 1) | Target: (0, 2) | Action: 3
+[Sim] Agent: (4, 1) | Target: (0, 2) | Action: 3
+[Sim] Agent: (4, 0) | Target: (0, 2) | Action: 0
+[Sim] Agent: (3, 0) | Target: (0, 2) | Action: 2
+[Sim] Agent: (2, 0) | Target: (0, 2) | Action: 2
+[Sim] Agent: (2, 1) | Target: (0, 2) | Action: 1
+[Sim] Agent: (1, 1) | Target: (0, 2) | Action: 2
+[Sim] Agent: (0, 1) | Target: (0, 2) | Action: 2
+[Sim] Agent: (0, 2) | Target: (0, 2) | Action: 1

@@ -33,7 +33,7 @@ def owl_worker():
             continue
 
 
-def train_agent(episodes: int = 5000, max_steps: int = 30) -> tuple[GridWorldEnv, QLearningAgent]:
+def train_agent(episodes: int = 15000, max_steps: int = 50) -> tuple[GridWorldEnv, QLearningAgent]:
     env = GridWorldEnv()
     agent = QLearningAgent()
 
@@ -48,9 +48,10 @@ def train_agent(episodes: int = 5000, max_steps: int = 30) -> tuple[GridWorldEnv
             episode_reward += reward
             if done:
                 break
-        agent.decay_exploration()
-        if (episode + 1) % 50 == 0:
-            print(f"Episode {episode + 1:03d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
+        # Usiamo un decadimento più lento per esplorare meglio lo spazio degli stati
+        agent.decay_exploration(minimum=0.01, factor=0.999)
+        if (episode + 1) % 500 == 0:
+            print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
 
     return env, agent
 
@@ -68,71 +69,98 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
     try:
         state = env.reset()
         recent_positions: list[tuple[int, int]] = []
-        step_count = 0
+        episode_step_count = 0
+        total_step_count = 0
         last_action = None
-        while not renderer.should_close():
-            # Invio del nuovo frame al thread di visione se abilitato
-            if USE_OWL_VISION:
-                frame_np = renderer.capture_frame()
-                if frame_np is not None:
-                    # Svuotiamo code vecchie per sicurezza
-                    while not owl_frame_queue.empty():
-                        owl_frame_queue.get()
-                    while not owl_result_queue.empty():
-                        owl_result_queue.get()
-                        
-                    img = Image.fromarray(frame_np)
-                    owl_frame_queue.put((img, env.target_label))
-                    
-                    # Attendiamo il risultato mantenendo la finestra OpenGL responsiva
-                    while owl_result_queue.empty():
-                        renderer.poll()
-                        if renderer.should_close():
-                            break
-                        time.sleep(0.01)
-                        
-                    if renderer.should_close():
-                        break
-                        
-                    res = owl_result_queue.get()
-                    owl_result.update(res)
+        episode_owl_cache = {}
+        
+        with open("movements.log", "w") as log_file:
+            log_file.write("=== Simulation Movements Log ===\n")
 
-            # Override visivo con i risultati (ora sincroni) di OWL-ViT se abilitato
-            current_state = list(state)
-            if USE_OWL_VISION:
-                current_state[0] = owl_result["dx"]
-                current_state[1] = owl_result["dy"]
-                current_state[2] = int(owl_result["visible"])
-            current_state = tuple(current_state)
+            while not renderer.should_close():
+                agent_pos = (env.agent_x, env.agent_y)
+                
+                # Invio del nuovo frame al thread di visione se abilitato
+                if USE_OWL_VISION:
+                    if agent_pos in episode_owl_cache:
+                        owl_result.update(episode_owl_cache[agent_pos])
+                    else:
+                        frame_np = renderer.capture_frame()
+                        if frame_np is not None:
+                            # Svuotiamo code vecchie per sicurezza
+                            while not owl_frame_queue.empty():
+                                owl_frame_queue.get()
+                            while not owl_result_queue.empty():
+                                owl_result_queue.get()
+                                
+                            img = Image.fromarray(frame_np)
+                            owl_frame_queue.put((img, env.target_label))
+                            
+                            # Attendiamo il risultato mantenendo la finestra OpenGL responsiva
+                            while owl_result_queue.empty():
+                                renderer.poll()
+                                if renderer.should_close():
+                                    break
+                                time.sleep(0.01)
+                                
+                            if renderer.should_close():
+                                break
+                                
+                            res = owl_result_queue.get()
+                            owl_result.update(res)
+                            episode_owl_cache[agent_pos] = res
 
-            action = _choose_action_without_loop(env, current_state, agent, recent_positions, last_action)
-            state, _, done, _ = env.step(action)
-            last_action = action
-            
-            renderer.draw()
-            renderer.poll()
-            
-            # Un piccolo sleep visivo se NON stiamo usando OWL (altrimenti OWL è già abbastanza lento)
-            if not USE_OWL_VISION:
-                time.sleep(0.35)
-            
-            # Trova l'oggetto target per stamparne la posizione reale
-            target_obj = next((obj for obj in env.objects if obj.label == env.target_label), None)
-            target_pos = (target_obj.x, target_obj.y) if target_obj else (None, None)
-            
-            print(f"[Sim] Agent: ({env.agent_x}, {env.agent_y}) | Target: {target_pos} | OWL dx,dy: ({owl_result['dx']}, {owl_result['dy']}) | Action: {action}")
-            
-            if done:
-                print("Target reached, resetting scene.")
-                state = env.reset()
-                recent_positions = []
-                continue
-            recent_positions.append((env.agent_x, env.agent_y))
-            if len(recent_positions) > 20:
-                recent_positions.pop(0)
-            step_count += 1
-            if steps is not None and step_count >= steps:
-                break
+                # Override visivo con i risultati (ora sincroni) di OWL-ViT se abilitato
+                current_state = list(state)
+                if USE_OWL_VISION:
+                    current_state[0] = owl_result["dx"]
+                    current_state[1] = owl_result["dy"]
+                    current_state[2] = int(owl_result["visible"])
+                current_state = tuple(current_state)
+
+                action = _choose_action_without_loop(env, current_state, agent, recent_positions, last_action)
+                state, _, done, _ = env.step(action)
+                last_action = action
+                
+                renderer.draw()
+                renderer.poll()
+                
+                # Un piccolo sleep visivo se NON stiamo usando OWL oppure se stiamo usando la cache
+                if not USE_OWL_VISION or (USE_OWL_VISION and agent_pos in episode_owl_cache):
+                    time.sleep(0.35)
+                
+                # Trova l'oggetto target per stamparne la posizione reale
+                target_obj = next((obj for obj in env.objects if obj.label == env.target_label), None)
+                target_pos = (target_obj.x, target_obj.y) if target_obj else (None, None)
+                
+                log_file.write(f"[Sim] Agent: ({env.agent_x}, {env.agent_y}) | Target: {target_pos} | Action: {action}\n")
+                log_file.flush()
+                
+                episode_step_count += 1
+                total_step_count += 1
+                
+                if done:
+                    print(f"Obiettivo raggiunto in {episode_step_count} passi! Reset della scena.")
+                    state = env.reset()
+                    recent_positions = []
+                    episode_step_count = 0
+                    episode_owl_cache.clear()
+                    continue
+                
+                if episode_step_count >= 50:
+                    print(f"Limite passi raggiunto (50), l'agente non ha trovato l'obiettivo. Reset della scena.")
+                    state = env.reset()
+                    recent_positions = []
+                    episode_step_count = 0
+                    episode_owl_cache.clear()
+                    continue
+
+                recent_positions.append((env.agent_x, env.agent_y))
+                if len(recent_positions) > 20:
+                    recent_positions.pop(0)
+
+                if steps is not None and total_step_count >= steps:
+                    break
     finally:
         agent.epsilon = previous_epsilon
         renderer.shutdown()

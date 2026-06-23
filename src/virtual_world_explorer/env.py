@@ -32,13 +32,18 @@ class GridWorldEnv:
         self.objects: list[SceneObject] = []
 
     def reset(self) -> tuple[int, int, int, int, int, int, int]:
-        positions = self._sample_positions(4)
-        self.agent_x, self.agent_y = positions[0]
         object_specs = [
             ("chair", (0.1, 0.7, 0.2)),
             ("table", (0.2, 0.4, 0.9)),
             ("lamp", (0.9, 0.7, 0.2)),
+            ("table", (0.2, 0.4, 0.9)),
+            ("lamp", (0.9, 0.7, 0.2)),
+            ("table", (0.2, 0.4, 0.9)),
+            ("lamp", (0.9, 0.7, 0.2)),
         ]
+        positions = self._sample_positions(len(object_specs) + 1)
+        self.agent_x, self.agent_y = positions[0]
+        
         self.objects = [
             SceneObject(label=label, x=position[0], y=position[1], color=color)
             for (label, color), position in zip(object_specs, positions[1:])

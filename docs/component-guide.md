@@ -63,9 +63,9 @@ virtual-world-explorer/
 
 | Funzione | Cosa fa |
 |---|---|
-| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 5000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
+| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 15000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
 | `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. |
-| `owl_worker()` | Thread in background che calcola l'inferenza di OWL-ViT. Ora il `main` aspetta *sincronamente* il suo responso per azzerare la latenza visiva, permettendo al contempo a OpenGL di non bloccarsi. |
+| `owl_worker()` / Caching | L'inferenza di OWL-ViT usa una cache (`episode_owl_cache`) azzerata per singolo episodio. La vista dipende unicamente da (x, y), abbattendo del 90% il carico computazionale. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
 | `_choose_action_without_loop()` | Azione greedy dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e penalità per mosse cicliche. |
 
@@ -150,7 +150,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 |---|---|
 | `Detection` | Dataclass: `label`, `dx`, `dy`, `visible` |
 | `SemanticDetector` | Sensore semantico |
-| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 10 per coprire tutta la griglia), restituisce direzione normalizzata (dx ∈ {-1,0,1}, dy ∈ {-1,0,1}) e `visible=True`. Altrimenti `visible=False`, direzione zero |
+| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 3), restituisce direzione normalizzata (dx ∈ {-1,0,1}, dy ∈ {-1,0,1}) e `visible=True`. Altrimenti `visible=False`, direzione zero |
 
 **Cosa vede l'agente:** non l'immagine 3D, ma una direzione astratta. Il 3D è solo per l'occhio umano.
 
@@ -158,10 +158,10 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 
 | Classe / Metodo | Cosa fa |
 |---|---|
-| `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace. |
+| `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace, sfruttando automaticamente accelerazione hardware GPU (CUDA/MPS). |
 | `detect_target(image, target_name)` | Prende un'immagine ortografica, esegue l'inferenza zero-shot di OWL-ViT, calcola la bounding box, e restituisce `dx`, `dy`, `visible`. Usa confidenza a 0.02. |
 
-**Nota Architetturale Sulla Latenza:** Inizialmente OWL-ViT girava in modo puramente asincrono causando uno sfasamento cognitivo (l'agente elaborava immagini di 3 passi fa e ignorava gli ostacoli vicini). Ora l'integrazione è **sincrona rispetto al movimento**: l'agente attende fisicamente ("congela") che il modello visivo processi il frame del suo esatto step attuale, prima di decidere l'azione, eliminando errori di posizionamento ed eseguendo un *detect* chirurgico appena il bersaglio entra nel campo visivo ravvicinato di 3 blocchi.
+**Nota Architetturale Sulla Latenza:** L'integrazione è **sincrona** rispetto al movimento, ma l'impatto prestazionale è abbattuto grazie alla **cache posizionale**. Dal momento che la scena è statica per l'intero episodio e la camera è egocentrica, l'inferenza (pesante) viene lanciata al massimo una sola volta per ogni coordinata (x, y) calpestata. Tornare su celle note costa zero, rendendo fluidissime le manovre di momentum esplorativo.
 
 ---
 

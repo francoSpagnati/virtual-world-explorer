@@ -7,9 +7,10 @@ class OwlVisionDetector:
         """
         Inizializza il modello OWL-ViT per la detection visuale zero-shot.
         """
-        print(f"[OWL-ViT] Caricamento modello {model_name}...")
+        self.device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+        print(f"[OWL-ViT] Caricamento modello {model_name} su {self.device}...")
         self.processor = OwlViTProcessor.from_pretrained(model_name)
-        self.model = OwlViTForObjectDetection.from_pretrained(model_name)
+        self.model = OwlViTForObjectDetection.from_pretrained(model_name).to(self.device)
         print("[OWL-ViT] Modello caricato con successo.")
 
     def detect_target(self, image: Image.Image, target_name: str, threshold: float = 0.02) -> tuple[int, int, bool]:
@@ -21,7 +22,7 @@ class OwlVisionDetector:
         text_queries = [f"an object that is a {target_name}"]
         
         # Processiamo l'input
-        inputs = self.processor(text=[text_queries], images=image, return_tensors="pt")
+        inputs = self.processor(text=[text_queries], images=image, return_tensors="pt").to(self.device)
         
         # Inferenza
         with torch.no_grad():
