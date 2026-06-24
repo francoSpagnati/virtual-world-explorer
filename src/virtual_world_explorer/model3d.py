@@ -70,6 +70,7 @@ class Model3D:
                         mat.diffuse = tuple(color)
                     if hasattr(m, 'image') and m.image is not None:
                         mat.texture_image = m.image.copy().convert("RGBA")
+                        mat.diffuse = (1.0, 1.0, 1.0)
             
             self.materials[name] = mat
             

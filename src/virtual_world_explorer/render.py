@@ -62,6 +62,8 @@ from OpenGL.GL import (
     GL_DIFFUSE,
     GL_SPECULAR,
     GL_NORMALIZE,
+    GL_COLOR_MATERIAL,
+    glColorMaterial,
     GL_DIFFUSE,
     GL_SPECULAR,
     GL_FRONT_AND_BACK,
@@ -117,6 +119,8 @@ class OpenGLRenderer:
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         glEnable(GL_NORMALIZE)
+        glEnable(GL_COLOR_MATERIAL)
+        glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
         glShadeModel(GL_SMOOTH)
 
         light_ambient = [0.25, 0.25, 0.3, 1.0]
@@ -142,10 +146,7 @@ class OpenGLRenderer:
             else:
                 print(f"[Model3D] WARNING: {path} non trovato")
 
-    @staticmethod
-    def _set_material(diffuse: tuple[float, float, float]) -> None:
-        ambient = (diffuse[0] * 0.3, diffuse[1] * 0.3, diffuse[2] * 0.3)
-        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, [*diffuse, 1.0])
+
 
     def capture_frame(self) -> list[np.ndarray] | None:
         """
@@ -258,6 +259,7 @@ class OpenGLRenderer:
         glfw.terminate()
 
     def _draw_grid(self) -> None:
+        glDisable(GL_LIGHTING)
         glColor3f(0.18, 0.18, 0.22)
         glBegin(GL_LINES)
         for index in range(self.env.size + 1):
@@ -266,6 +268,7 @@ class OpenGLRenderer:
             glVertex3f(0, index, 0)
             glVertex3f(self.env.size, index, 0)
         glEnd()
+        glEnable(GL_LIGHTING)
 
     def _draw_cube(self, x: float, y: float, size: float) -> None:
         z_bottom = 0.0
@@ -319,22 +322,13 @@ class OpenGLRenderer:
             glPushMatrix()
             glTranslatef(scene_object.x + 0.5, scene_object.y + 0.5, 0.0)
 
-            mat_colors = [m.diffuse for m in model.materials.values()]
-            if mat_colors:
-                avg_color = (
-                    sum(c[0] for c in mat_colors) / len(mat_colors),
-                    sum(c[1] for c in mat_colors) / len(mat_colors),
-                    sum(c[2] for c in mat_colors) / len(mat_colors),
-                )
-                self._set_material(avg_color)
-
             model.render(target_size=model_scale)
             glPopMatrix()
 
     def _draw_agent(self) -> None:
         padding = self.config.cell_padding + 0.04
         glDisable(GL_TEXTURE_2D)
-        self._set_material((0.95, 0.95, 0.95))
+        glColor3f(0.95, 0.95, 0.95)
         side = 1.0 - (padding * 2)
         self._draw_cube(self.env.agent_x + padding, self.env.agent_y + padding, side)
 
