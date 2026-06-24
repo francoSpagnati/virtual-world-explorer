@@ -165,6 +165,18 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 
 ---
 
+## Approfondimento: Pipeline Visiva a 360° (Batched Inference)
+
+Con l'integrazione di OWL-ViT, il progetto ha superato la limitazione di un "tunnel visivo" frontale. La pipeline visiva funziona ora con i seguenti step:
+
+1. **Acquisizione a 360°:** `render.py` (`capture_frame()`) posiziona temporaneamente una telecamera 3D (con 90° di Field of View) al centro dell'agente e genera 4 inquadrature indipendenti girando su se stessa (NORD, SUD, OVEST, EST).
+2. **Batched Inference:** Piuttosto che eseguire 4 deduzioni sequenziali (il che affosserebbe il framerate), `main.py` invia l'intero array di 4 immagini ad `owl_vision.py`.
+3. **Prompt Negativi (Filtro Antidistrattori):** OWL-ViT viene interrogato simultaneamente per cercare `["chair", "table", "lamp"]`. Il modello assegna i vari "bounding box" all'etichetta più affine. Noi accettiamo esclusivamente i box con *label 0* (la sedia), riducendo praticamente a zero i falsi positivi (prima il modello scambiava il tavolo per una sedia se non gli veniva esplicitamente fornito "tavolo" come alternativa logica).
+4. **Mappatura Globale:** Una volta individuata la sedia nella telecamera con il punteggio migliore, la posizione 2D sullo schermo (destra/sinistra) viene ruotata in base all'indice della telecamera (0=N, 1=S, 2=O, 3=E) fornendo all'istante le esatte coordinate *globali* `dx` e `dy` della griglia, esattamente come se fosse un radar.
+5. **Caching Posizionale:** Per evitare di ripetere questo processo ogni volta, l'osservazione globale `(dx, dy, visible)` viene salvata nella `episode_owl_cache` legata alla precisa coordinata `(x, y)` dell'agente per tutta la durata dell'episodio. Tornare su una cella già visitata costa 0 millisecondi di elaborazione.
+
+---
+
 ## Come gira il tutto
 
 ```
