@@ -33,10 +33,13 @@ def owl_worker():
             continue
 
 
-def train_agent(episodes: int = 15000, max_steps: int = 50) -> tuple[GridWorldEnv, QLearningAgent]:
+def train_agent(episodes: int = 15000, max_steps: int | None = None) -> tuple[GridWorldEnv, QLearningAgent]:
     
     env = GridWorldEnv()
     agent = QLearningAgent()
+    
+    if max_steps is None:
+        max_steps = env.size * env.size
 
     for episode in range(episodes):
         state = env.reset()
@@ -156,8 +159,9 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                     episode_owl_cache.clear()
                     continue
                 
-                if episode_step_count >= 50:
-                    print(f"Limite passi raggiunto (50), l'agente non ha trovato l'obiettivo. Reset della scena.")
+                max_demo_steps = env.size * env.size
+                if episode_step_count >= max_demo_steps:
+                    print(f"Limite passi raggiunto ({max_demo_steps}), l'agente non ha trovato l'obiettivo. Reset della scena.")
                     state = env.reset()
                     recent_positions = []
                     episode_step_count = 0
