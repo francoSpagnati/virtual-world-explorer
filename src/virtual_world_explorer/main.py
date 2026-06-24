@@ -26,8 +26,8 @@ def owl_worker():
             item = owl_frame_queue.get(timeout=1.0)
             if item is None:
                 break
-            image, target_name = item
-            dx, dy, vis = detector.detect_target(image, target_name)
+            images, target_names = item
+            dx, dy, vis = detector.detect_target_multiview(images, target_names)
             owl_result_queue.put({"dx": dx, "dy": dy, "visible": vis})
         except queue.Empty:
             continue
@@ -57,7 +57,7 @@ def train_agent(episodes: int = 15000, max_steps: int = 50) -> tuple[GridWorldEn
     return env, agent
 
 
-def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None) -> None:
+def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None, max_episodes: int | None = 5) -> None:
     renderer = OpenGLRenderer(env)
     renderer.initialize()
     previous_epsilon = agent.epsilon
@@ -94,12 +94,10 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                             while not owl_result_queue.empty():
                                 owl_result_queue.get()
                             
-                            # Scegliamo l'inquadratura basandoci sulla direzione attuale del robot
-                            current_direction = last_action if last_action is not None else 0
-                            selected_frame = frames_list[current_direction]
-                                
-                            img = Image.fromarray(selected_frame)
-                            owl_frame_queue.put((img, env.target_label))
+                            # Invia tutte e 4 le inquadrature per la scansione a 360 gradi
+                            images = [Image.fromarray(f) for f in frames_list]
+                            target_names = [env.target_label, "table", "lamp"]
+                            owl_frame_queue.put((images, target_names))
                             
                             # Ciclo di attesa che continua a renderizzare la vista zenitale principale 
                             # evitando blocchi o schermate nere sull'interfaccia utente
@@ -119,9 +117,11 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
 
                 current_state = list(state)
                 if USE_OWL_VISION:
-                    current_state[0] = owl_result["dx"]
-                    current_state[1] = owl_result["dy"]
-                    current_state[2] = int(owl_result["visible"])
+                    visible = owl_result["visible"]
+                    if visible:
+                        current_state[0] = owl_result["dx"]
+                        current_state[1] = owl_result["dy"]
+                    current_state[2] = int(visible)
                 current_state = tuple(current_state)
 
                 action = _choose_action_without_loop(env, current_state, agent, recent_positions, last_action)
@@ -146,6 +146,10 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                 
                 if done:
                     print(f"Obiettivo raggiunto in {episode_step_count} passi! Reset della scena.")
+                    if max_episodes is not None:
+                        max_episodes -= 1
+                        if max_episodes <= 0:
+                            break
                     state = env.reset()
                     recent_positions = []
                     episode_step_count = 0
@@ -220,7 +224,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent
 
 def main() -> None:
     env, agent = train_agent()
-    run_demo(env, agent)
+    run_demo(env, agent, max_episodes=6)
 
 
 if __name__ == "__main__":

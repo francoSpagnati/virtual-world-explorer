@@ -64,8 +64,8 @@ virtual-world-explorer/
 | Funzione | Cosa fa |
 |---|---|
 | `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 15000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
-| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. |
-| `owl_worker()` / Caching | L'inferenza di OWL-ViT usa una cache (`episode_owl_cache`) azzerata per singolo episodio. La vista dipende unicamente da (x, y), abbattendo del 90% il carico computazionale. |
+| `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. Termina dopo un numero preimpostato di episodi (`max_episodes`). |
+| `owl_worker()` / Caching | L'inferenza usa una cache (`episode_owl_cache`). Ora riceve **tutte e 4 le inquadrature** (scansione a 360°) ed effettua un'inferenza batched per trovare istantaneamente la direzione globale della sedia senza dovercisi girare verso. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
 | `_choose_action_without_loop()` | Azione greedy dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e penalità per mosse cicliche. |
 
@@ -159,9 +159,9 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | Classe / Metodo | Cosa fa |
 |---|---|
 | `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace, sfruttando automaticamente accelerazione hardware GPU (CUDA/MPS). |
-| `detect_target(image, target_name)` | Prende un'immagine ortografica, esegue l'inferenza zero-shot di OWL-ViT, calcola la bounding box, e restituisce `dx`, `dy`, `visible`. Usa confidenza a 0.02. |
+| `detect_target_multiview(images, target_names)` | Riceve il batch delle 4 telecamere per effettuare scansione a 360°. Sfrutta i target secondari ("table", "lamp") come filtri negativi per annullare i falsi positivi e restituisce le coordinate globali `dx`, `dy`. |
 
-**Nota Architetturale Sulla Latenza:** L'integrazione è **sincrona** rispetto al movimento, ma l'impatto prestazionale è abbattuto grazie alla **cache posizionale**. Dal momento che la scena è statica per l'intero episodio e la camera è egocentrica, l'inferenza (pesante) viene lanciata al massimo una sola volta per ogni coordinata (x, y) calpestata. Tornare su celle note costa zero, rendendo fluidissime le manovre di momentum esplorativo.
+**Nota Architetturale Sulla Latenza:** L'integrazione è **sincrona** rispetto al movimento, ma l'impatto prestazionale è abbattuto grazie alla **cache posizionale**. Dal momento che la scena è statica per l'intero episodio, l'inferenza (pesante ma ottimizzata dal *batching*) viene lanciata al massimo una sola volta per ogni coordinata (x, y) calpestata fornendo una percezione perfetta a 360°. Tornare su celle note costa zero, rendendo fluidissime le manovre di momentum esplorativo.
 
 ---
 
