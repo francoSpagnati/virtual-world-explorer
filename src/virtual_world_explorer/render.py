@@ -147,24 +147,36 @@ class OpenGLRenderer:
         ambient = (diffuse[0] * 0.3, diffuse[1] * 0.3, diffuse[2] * 0.3)
         glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, [*diffuse, 1.0])
 
-    def capture_frame(self) -> np.ndarray | None:
-        """Cattura la visuale egocentrica per OWL-ViT."""
+    def capture_frame(self) -> list[np.ndarray] | None:
+        """
+        Esegue 4 rendering prospettici 3D dalle coordinate dell'agente 
+        (uno per ogni direzione: 0=Nord, 1=Sud, 2=Ovest, 3=Est) e restituisce una lista di 4 frame.
+        """
         if self.window is None:
             return None
-            
-        # Draw the egocentric view for OWL-ViT to the back buffer
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        self._setup_camera(egocentric=True)
-        self._draw_grid()
-        self._draw_objects()
-        self._draw_agent()
-        
+
+        frames = []
         width, height = self.config.window_size, self.config.window_size
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
-        image_array = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
-        image_array = np.flipud(image_array)
-        return image_array
+
+        # Scansione sulle 4 direzioni orizzontali
+        for direction in range(4):
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            
+            # Chiamiamo setup_camera con egocentric=True passando la direzione corrente
+            self._setup_camera(egocentric=True, direction=direction)
+            
+            # Disegniamo il mondo (Griglia + Oggetti)
+            self._draw_grid()
+            self._draw_objects()
+            
+            # Catturiamo i pixel di questa direzione
+            data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
+            image_array = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
+            image_array = np.flipud(image_array)
+            frames.append(image_array)
+
+        return frames
 
     def should_close(self) -> bool:
         return bool(self.window is None or glfw.window_should_close(self.window))
@@ -192,34 +204,53 @@ class OpenGLRenderer:
         ])
         glfw.swap_buffers(self.window)
 
-    def _setup_camera(self, egocentric: bool) -> None:
+    def _setup_camera(self, egocentric: bool, direction: int = 0) -> None:
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         
         near_val = 0.1
         far_val = 50.0
-        
+
         if egocentric:
-            # Proiezione ortografica ristretta per la telecamera dell'IA:
-            # - Il raggio visivo è limitato a circa 3 blocchi (view_size = 3.5).
-            # - Se il target è oltre questo raggio, non viene disegnato nell'immagine.
-            view_size = 3.5
-            glOrtho(-view_size, view_size, -view_size, view_size, near_val, far_val)
+            # Nuova telecamera dell'IA: Prospettica (3D) con FOV ampio per analizzare la scena
+            fov = 90.0
+            top = near_val * math.tan(math.radians(fov / 2.0))
+            right = top
+            glFrustum(-right, right, -top, top, near_val, far_val)
+            
+            glMatrixMode(GL_MODELVIEW)
+            glLoadIdentity()
+            
+            # Posizionamento ad altezza occhi dell'agente (az = 0.4 per stare sopra il pavimento)
+            ax = self.env.agent_x + 0.5
+            ay = self.env.agent_y + 0.5
+            az = 0.4
+            
+            # Ruotiamo l'inquadratura in base alla direzione di scansione passata da capture_frame
+            if direction == 0:    # NORD (verso -Y)
+                glRotatef(-90.0, 1.0, 0.0, 0.0)
+                glRotatef(180.0, 0.0, 0.0, 1.0)
+            elif direction == 1:  # SUD (verso +Y)
+                glRotatef(-90.0, 1.0, 0.0, 0.0)
+            elif direction == 2:  # OVEST (verso -X)
+                glRotatef(-90.0, 1.0, 0.0, 0.0)
+                glRotatef(-90.0, 0.0, 0.0, 1.0)
+            elif direction == 3:  # EST (verso +X)
+                glRotatef(-90.0, 1.0, 0.0, 0.0)
+                glRotatef(90.0, 0.0, 0.0, 1.0)
+                
+            glTranslatef(-ax, -ay, -az)
         else:
+            # IL TUO CODICE ORIGINALE IDENTICO PER L'UTENTE UMANO (Vista dall'alto inclinata)
             fov = 45.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
             glFrustum(-right, right, -top, top, near_val, far_val)
-        
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        
-        if egocentric:
-            glTranslatef(-(self.env.agent_x + 0.5), -(self.env.agent_y + 0.5), -self.env.size * 1.5)
-        else:
-            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
             
-        glRotatef(-55.0, 1.0, 0.0, 0.0)
+            glMatrixMode(GL_MODELVIEW)
+            glLoadIdentity()
+            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
+            glRotatef(-55.0, 1.0, 0.0, 0.0)
 
     def shutdown(self) -> None:
         if self.window is not None:

@@ -34,6 +34,7 @@ def owl_worker():
 
 
 def train_agent(episodes: int = 15000, max_steps: int = 50) -> tuple[GridWorldEnv, QLearningAgent]:
+    
     env = GridWorldEnv()
     agent = QLearningAgent()
 
@@ -80,24 +81,30 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
             while not renderer.should_close():
                 agent_pos = (env.agent_x, env.agent_y)
                 
-                # Invio del nuovo frame al thread di visione se abilitato
                 if USE_OWL_VISION:
                     if agent_pos in episode_owl_cache:
                         owl_result.update(episode_owl_cache[agent_pos])
                     else:
-                        frame_np = renderer.capture_frame()
-                        if frame_np is not None:
-                            # Svuotiamo code vecchie per sicurezza
+                        # Otteniamo la lista delle 4 inquadrature orizzontali
+                        frames_list = renderer.capture_frame()
+                        
+                        if frames_list is not None:
                             while not owl_frame_queue.empty():
                                 owl_frame_queue.get()
                             while not owl_result_queue.empty():
                                 owl_result_queue.get()
+                            
+                            # Scegliamo l'inquadratura basandoci sulla direzione attuale del robot
+                            current_direction = last_action if last_action is not None else 0
+                            selected_frame = frames_list[current_direction]
                                 
-                            img = Image.fromarray(frame_np)
+                            img = Image.fromarray(selected_frame)
                             owl_frame_queue.put((img, env.target_label))
                             
-                            # Attendiamo il risultato mantenendo la finestra OpenGL responsiva
+                            # Ciclo di attesa che continua a renderizzare la vista zenitale principale 
+                            # evitando blocchi o schermate nere sull'interfaccia utente
                             while owl_result_queue.empty():
+                                renderer.draw()
                                 renderer.poll()
                                 if renderer.should_close():
                                     break
@@ -110,7 +117,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                             owl_result.update(res)
                             episode_owl_cache[agent_pos] = res
 
-                # Override visivo con i risultati (ora sincroni) di OWL-ViT se abilitato
                 current_state = list(state)
                 if USE_OWL_VISION:
                     current_state[0] = owl_result["dx"]
@@ -122,14 +128,13 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                 state, _, done, _ = env.step(action)
                 last_action = action
                 
+                # Renderizza la normale vista zenitale d'osservazione
                 renderer.draw()
                 renderer.poll()
                 
-                # Un piccolo sleep visivo se NON stiamo usando OWL oppure se stiamo usando la cache
                 if not USE_OWL_VISION or (USE_OWL_VISION and agent_pos in episode_owl_cache):
                     time.sleep(0.35)
                 
-                # Trova l'oggetto target per stamparne la posizione reale
                 target_obj = next((obj for obj in env.objects if obj.label == env.target_label), None)
                 target_pos = (target_obj.x, target_obj.y) if target_obj else (None, None)
                 

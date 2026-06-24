@@ -1,4 +1,7 @@
 PyOpenGL>=3.1.7
 glfw>=2.7.0
 Pillow
-numpytrimesh
+numpy
+trimesh
+torch
+transformers
