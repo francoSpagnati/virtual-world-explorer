@@ -210,10 +210,10 @@ class OpenGLRenderer:
         glLoadIdentity()
         
         near_val = 0.1
-        far_val = 50.0
+        far_val = 150.0  # Aumentato da 50.0 a 150.0 per evitare il clipping ad arene grandi
 
         if egocentric:
-            # Nuova telecamera dell'IA: Prospettica (3D) con FOV ampio per analizzare la scena
+            # La telecamera AI rimane invariata perché scansiona a 360° con FOV fisso ad altezza occhi
             fov = 90.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -242,7 +242,7 @@ class OpenGLRenderer:
                 
             glTranslatef(-ax, -ay, -az)
         else:
-            # IL TUO CODICE ORIGINALE IDENTICO PER L'UTENTE UMANO (Vista dall'alto inclinata)
+            # VISTA UTENTE PARAMETRICA
             fov = 45.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -250,7 +250,12 @@ class OpenGLRenderer:
             
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
-            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
+            
+            # Calcolo dinamico della distanza sull'asse Z per inquadrare perfettamente arene grandi
+            # Usiamo un fattore proporzionale (es. size * 1.6) per assicurarci la copertura visiva
+            camera_distance = self.env.size * 1.6
+            
+            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -camera_distance)
             glRotatef(-55.0, 1.0, 0.0, 0.0)
 
     def shutdown(self) -> None:

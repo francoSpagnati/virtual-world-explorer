@@ -33,13 +33,15 @@ def owl_worker():
             continue
 
 
-def train_agent(episodes: int = 15000, max_steps: int | None = None) -> tuple[GridWorldEnv, QLearningAgent]:
+def train_agent(grid_size: int = 7, episodes: int = 15000, max_steps: int | None = None) -> tuple[GridWorldEnv, QLearningAgent]:
     
-    env = GridWorldEnv()
+    # Passiamo la griglia dinamica qui
+    env = GridWorldEnv(size=grid_size)
     agent = QLearningAgent()
     
     if max_steps is None:
-        max_steps = env.size * env.size
+        # Molto importante: in un mondo più grande servono più passi per esplorare
+        max_steps = env.size * env.size 
 
     for episode in range(episodes):
         state = env.reset()
@@ -52,7 +54,6 @@ def train_agent(episodes: int = 15000, max_steps: int | None = None) -> tuple[Gr
             episode_reward += reward
             if done:
                 break
-        # Usiamo un decadimento più lento per esplorare meglio lo spazio degli stati
         agent.decay_exploration(minimum=0.01, factor=0.999)
         if (episode + 1) % 500 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
@@ -227,7 +228,8 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent
 
 
 def main() -> None:
-    env, agent = train_agent()
+    GRID_SIZE = 7
+    env, agent = train_agent(grid_size=GRID_SIZE, episodes=15000)
     run_demo(env, agent, max_episodes=6)
 
 
