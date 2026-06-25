@@ -63,8 +63,9 @@ virtual-world-explorer/
 
 | Funzione | Cosa fa |
 |---|---|
-| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue 15000 episodi di addestramento (senza OWL per velocità). Restituisce ambiente e agente. |
+| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue l'addestramento DQN. Restituisce ambiente e agente. |
 | `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. Termina dopo un numero preimpostato di episodi (`max_episodes`). |
+| `_update_owl_vision_state()` | (Nuova) Gestisce l'estrazione e caching dei risultati di OWL-ViT per mantenere `run_demo` leggibile. |
 | `owl_worker()` / Caching | L'inferenza usa una cache (`episode_owl_cache`). Ora riceve **tutte e 4 le inquadrature** (scansione a 360°) ed effettua un'inferenza batched per trovare istantaneamente la direzione globale della sedia senza dovercisi girare verso. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
 | `_choose_action_without_loop()` | Azione greedy dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e penalità per mosse cicliche. |
@@ -91,12 +92,13 @@ virtual-world-explorer/
 |---|---|
 | `initialize()` | Crea finestra GLFW, abilita `GL_DEPTH_TEST`, `GL_BLEND`, `GL_LIGHTING`, `GL_LIGHT0`, carica modelli OBJ + texture |
 | `draw()` | Imposta proiezione prospettica, camera inclinata, chiama i sotto-metodi di disegno, swap buffer |
-| `_draw_grid()` | Griglia 7×7 con `GL_LINES` |
-| `_draw_cube()` | Cubo solido con 6 `GL_QUADS` + normals per-face (usato per l'agente) |
-| `_draw_objects()` | Itera `SceneObject`, carica `Model3D.render()` con push/pop matrix |
-| `_draw_agent()` | Imposta materiale bianco, disegna cubo agente |
-| `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità) |
-| `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf` |
+| `_draw_grid()` | Griglia con `GL_LINES` (converte la dimensione `float` dell'ambiente in `int` per la generazione delle linee). |
+| `_draw_cube()` | Cubo solido con 6 `GL_QUADS` + normals per-face (usato per l'agente). |
+| `_draw_objects()` | Itera `SceneObject`, carica `Model3D.render()` con push/pop matrix. |
+| `_draw_agent()` | Imposta materiale bianco, disegna cubo agente. |
+| `_setup_camera()` | Imposta la telecamera in due modalità. **Utente**: usa un offset preciso (`-10.5` su Z, poi ruota di `-55°`, poi trasla di `-3.5` su X/Y) per centrare perfettamente la scacchiera sullo schermo. **Egocentrica**: usa le coordinate esatte `float` dell'agente. |
+| `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità). |
+| `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf`. |
 | `capture_frame()` | Renderizza in back-buffer la visuale *egocentrica ortografica* dell'AI e restituisce array NumPy RGB |
 
 ### `model3d.py` — Rendering 3D con trimesh
@@ -219,7 +221,7 @@ main.py
          ▼            ▼               ▼
    ┌──────────┐ ┌──────────┐ ┌──────────────────────┐
    │ agent.py │ │ env.py   │ │   render.py          │
-   │ Q-table  │ │ 7×7 grid │ │   OpenGL 3D          │
+   │ DQN (NN) │ │ float gr │ │   OpenGL 3D          │
    │ ε-greedy │ │ reward   │ │   prospettico + luci │
    │ α/γ/ε    │ │ step()   │ │   Model3D.render()   │
    └──────────┘ └────┬─────┘ │   cubo agente + HUD  │
