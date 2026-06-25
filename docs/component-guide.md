@@ -138,11 +138,11 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 
 | Metodo | Cosa fa |
 |---|---|
-| `choose_action(state)` | ε-greedy: sceglie azione casuale con prob ε, altrimenti migliore dalla Q-table |
-| `learn(state, action, reward, next_state, done)` | `Q[s][a] += α * (reward + γ * max(Q[s']) - Q[s][a])` |
-| `decay_exploration(min=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
+| `choose_action(state)` | ε-greedy: sceglie azione casuale con prob ε, altrimenti migliore dalla rete neurale |
+| `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation |
+| `decay_exploration(minimum=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** α=0.1, γ=0.9, ε iniziale=1.0. Inizializzazione **pessimistica** dei Q-values a `0.0` (anziché 1.0) per impedire che le azioni inesplorate dominino sulle azioni utili che hanno un discount factor applicato. Limite massimo di 30 passi per episodio.
+**Iperparametri:** lr=0.001 (Adam), γ=0.9, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 64 -> 32 -> 4) con attivazione ReLU.
 
 ### `detector.py` — Gli occhi dell'agente
 

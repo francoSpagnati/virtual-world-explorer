@@ -224,8 +224,8 @@ class OpenGLRenderer:
             glLoadIdentity()
             
             # Posizionamento ad altezza occhi dell'agente (az = 0.4 per stare sopra il pavimento)
-            ax = self.env.agent_x + 0.5
-            ay = self.env.agent_y + 0.5
+            ax = self.env.agent_x
+            ay = self.env.agent_y
             az = 0.4
             
             # Ruotiamo l'inquadratura in base alla direzione di scansione passata da capture_frame
@@ -251,8 +251,9 @@ class OpenGLRenderer:
             
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
-            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -self.env.size * 1.5)
+            glTranslatef(0.0, 0.0, -self.env.size * 1.5)
             glRotatef(-55.0, 1.0, 0.0, 0.0)
+            glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, 0.0)
 
     def shutdown(self) -> None:
         if self.window is not None:
@@ -263,7 +264,7 @@ class OpenGLRenderer:
         glDisable(GL_LIGHTING)
         glColor3f(0.18, 0.18, 0.22)
         glBegin(GL_LINES)
-        for index in range(self.env.size + 1):
+        for index in range(int(self.env.size) + 1):
             glVertex3f(index, 0, 0)
             glVertex3f(index, self.env.size, 0)
             glVertex3f(0, index, 0)

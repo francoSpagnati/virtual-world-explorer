@@ -3,7 +3,7 @@
 Questo file funge da "mappa" e "contesto" per qualsiasi Intelligenza Artificiale che deve comprendere, modificare o espandere questo progetto. Leggilo attentamente prima di proporre modifiche.
 
 ## 1. Dominio e Contesto
-Siamo in un progetto Python che simula un ambiente 3D ("Virtual World Explorer") in cui un agente controllato da algoritmi di Reinforcement Learning (Q-learning tabellare) deve imparare a navigare una griglia evitando ostacoli (es. tavolo, lampada) per raggiungere un bersaglio (sedia).
+Siamo in un progetto Python che simula un ambiente 3D ("Virtual World Explorer") in cui un agente controllato da algoritmi di Deep Reinforcement Learning (Deep Q-Network, DQN) in PyTorch deve imparare a navigare una griglia evitando ostacoli (es. tavolo, lampada) per raggiungere un bersaglio (sedia).
 L'aspetto visivo è interamente delegato a un renderer **OpenGL 3D (immediate mode)**.
 L'obiettivo a lungo termine del progetto è integrare modelli di Vision-Language (come **OWL-ViT**) per dare all'agente input semantici estratti dai frame renderizzati (es. per capire dov'è la sedia "guardando" lo schermo).
 
@@ -16,9 +16,9 @@ Il rendering *deve* avvenire manipolando direttamente lo stato OpenGL tramite `P
 
 ## 3. Stato Attuale del Progetto (Configurazione)
 Il progetto è in uno stato avanzato e pienamente funzionante, configurato come segue:
-- **Agente RL (Tuning):** `agent.py` utilizza Q-Learning. L'addestramento è stato esteso a 15000 episodi per permettere all'agente di padroneggiare mappe molto congestionate (ora con 6 ostacoli invece di 2). La Q-table è inizializzata a `0.0` per evitare che il discount factor renda l'azione vincente "peggiore" delle azioni inesplorate. Il limite di mosse è a 50 (in esplorazione) e le penalità per i passi a vuoto forzano percorsi ottimali.
-- **Spazio di Stato Ottimizzato (7-D):** L'agente percepisce il mondo tramite una tupla relativa: `(dx_target, dy_target, visible, danger_up, danger_down, danger_left, danger_right)`. Le coordinate assolute sono state rimosse. I sensori di prossimità (`danger_*`) si sono dimostrati formidabili, permettendo all'agente di eseguire complessi aggiramenti non-lineari attorno a cluster di ostacoli densi.
-- **Sensore Logico & Momentum:** `vision_radius` è impostata a 3 (limitata). Quando l'agente non vede la sedia (visible=0), usa una logica di "Momentum" (`last_action` in `main.py`) per muoversi in linee rette veloci come un Roomba, esplorando la mappa senza perdersi in wandering casuali. Appena `visible=1`, il momentum si disattiva e l'agente obbedisce ciecamente alla Q-table per colpire il target.
+- **Agente RL (Tuning):** `agent.py` utilizza Deep Q-Learning (DQN) con PyTorch. L'addestramento è stato esteso a 30000 episodi per permettere all'agente di padroneggiare mappe molto congestionate (ora con 6 ostacoli invece di 2). I Q-values sono predetti da una rete neurale, eliminando la necessità di una Q-table fissa e garantendo maggiore generalizzazione continua. Il limite di mosse impedisce percorsi infiniti e le penalità forzano percorsi ottimali.
+- **Spazio di Stato Ottimizzato (7-D):** L'agente percepisce il mondo tramite una tupla relativa continua: `(dx_target, dy_target, visible, danger_up, danger_down, danger_left, danger_right)`. Le coordinate assolute sono state rimosse. I sensori di prossimità (`danger_*`) si sono dimostrati formidabili.
+- **Sensore Logico & Momentum:** `vision_radius` è impostata a 3.5. Quando l'agente non vede la sedia (visible=0), usa una logica di "Momentum" (`last_action` in `main.py`) per muoversi in linee rette. Appena `visible=1`, il momentum si disattiva e l'agente obbedisce ciecamente alla policy di navigazione basata su rete neurale.
 - **Motore 3D a Doppia Telecamera:** `render.py` adotta un'ingegnosa architettura dual-camera. Ad ogni step renderizza la scena due volte:
   1. *Per l'Utente:* Una telecamera fissa prospettica (`glFrustum`), visivamente stabile e piacevole.
   2. *Per OWL-ViT:* Una telecamera egocentrica ortografica (`glOrtho`) limitata a un raggio visivo di 3 blocchi (uguale al sensore logico). Questo elimina la distorsione prospettica.

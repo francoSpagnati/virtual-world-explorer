@@ -62,6 +62,35 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
     return env, agent
 
 
+def _update_owl_vision_state(env: GridWorldEnv, renderer: OpenGLRenderer, agent_pos: tuple[float, float], episode_owl_cache: dict) -> None:
+    if agent_pos in episode_owl_cache:
+        owl_result.update(episode_owl_cache[agent_pos])
+        return
+
+    frames_list = renderer.capture_frame()
+    if frames_list is None:
+        return
+
+    while not owl_frame_queue.empty(): owl_frame_queue.get()
+    while not owl_result_queue.empty(): owl_result_queue.get()
+    
+    images = [Image.fromarray(f) for f in frames_list]
+    target_names = [env.target_label, "table", "lamp"]
+    owl_frame_queue.put((images, target_names))
+    
+    while owl_result_queue.empty():
+        renderer.draw()
+        renderer.poll()
+        if renderer.should_close(): return
+        time.sleep(0.01)
+        
+    if renderer.should_close(): return
+        
+    res = owl_result_queue.get()
+    owl_result.update(res)
+    episode_owl_cache[agent_pos] = res
+
+
 def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None, max_episodes: int | None = 5) -> None:
     renderer = OpenGLRenderer(env)
     renderer.initialize()
@@ -74,7 +103,7 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
 
     try:
         state = env.reset()
-        recent_positions: list[tuple[int, int]] = []
+        recent_positions: list[tuple[float, float]] = []
         episode_step_count = 0
         total_step_count = 0
         last_action = None
@@ -87,85 +116,47 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                 agent_pos = (env.agent_x, env.agent_y)
                 
                 if USE_OWL_VISION:
-                    if agent_pos in episode_owl_cache:
-                        owl_result.update(episode_owl_cache[agent_pos])
-                    else:
-                        # Otteniamo la lista delle 4 inquadrature orizzontali
-                        frames_list = renderer.capture_frame()
-                        
-                        if frames_list is not None:
-                            while not owl_frame_queue.empty():
-                                owl_frame_queue.get()
-                            while not owl_result_queue.empty():
-                                owl_result_queue.get()
-                            
-                            # Invia tutte e 4 le inquadrature per la scansione a 360 gradi
-                            images = [Image.fromarray(f) for f in frames_list]
-                            target_names = [env.target_label, "table", "lamp"]
-                            owl_frame_queue.put((images, target_names))
-                            
-                            # Ciclo di attesa che continua a renderizzare la vista zenitale principale 
-                            # evitando blocchi o schermate nere sull'interfaccia utente
-                            while owl_result_queue.empty():
-                                renderer.draw()
-                                renderer.poll()
-                                if renderer.should_close():
-                                    break
-                                time.sleep(0.01)
-                                
-                            if renderer.should_close():
-                                break
-                                
-                            res = owl_result_queue.get()
-                            owl_result.update(res)
-                            episode_owl_cache[agent_pos] = res
+                    _update_owl_vision_state(env, renderer, agent_pos, episode_owl_cache)
+                    if renderer.should_close():
+                        break
 
-                current_state = list(state)
-                if USE_OWL_VISION:
-                    visible = owl_result["visible"]
-                    if visible:
+                    current_state = list(state)
+                    if owl_result["visible"]:
                         current_state[0] = owl_result["dx"]
                         current_state[1] = owl_result["dy"]
-                    current_state[2] = int(visible)
-                current_state = tuple(current_state)
+                    current_state[2] = int(owl_result["visible"])
+                    state = tuple(current_state)
 
-                action = _choose_action_without_loop(env, current_state, agent, recent_positions, last_action)
+                action = _choose_action_without_loop(env, state, agent, recent_positions, last_action)
                 state, _, done, _ = env.step(action)
                 last_action = action
                 
-                # Renderizza la normale vista zenitale d'osservazione
                 renderer.draw()
                 renderer.poll()
                 
-                if not USE_OWL_VISION or (USE_OWL_VISION and agent_pos in episode_owl_cache):
+                if not USE_OWL_VISION or agent_pos in episode_owl_cache:
                     time.sleep(0.35)
                 
-                target_obj = next((obj for obj in env.objects if obj.label == env.target_label), None)
-                target_pos = (target_obj.x, target_obj.y) if target_obj else (None, None)
-                
+                target_pos = env._target_object().x, env._target_object().y
                 log_file.write(f"[Sim] Agent: ({env.agent_x}, {env.agent_y}) | Target: {target_pos} | Action: {action}\n")
                 log_file.flush()
                 
                 episode_step_count += 1
                 total_step_count += 1
                 
-                if done:
-                    print(f"Obiettivo raggiunto in {episode_step_count} passi! Reset della scena.")
-                    if max_episodes is not None:
+                max_demo_steps = env.size * env.size
+                
+                if done or episode_step_count >= max_demo_steps:
+                    msg = f"Obiettivo raggiunto in {episode_step_count} passi!" if done else f"Limite passi raggiunto ({max_demo_steps})."
+                    print(f"{msg} Reset della scena.")
+                    
+                    if done and max_episodes is not None:
                         max_episodes -= 1
                         if max_episodes <= 0:
                             break
+                            
                     state = env.reset()
-                    recent_positions = []
-                    episode_step_count = 0
-                    episode_owl_cache.clear()
-                    continue
-                
-                max_demo_steps = env.size * env.size
-                if episode_step_count >= max_demo_steps:
-                    print(f"Limite passi raggiunto ({max_demo_steps}), l'agente non ha trovato l'obiettivo. Reset della scena.")
-                    state = env.reset()
-                    recent_positions = []
+                    recent_positions.clear()
                     episode_step_count = 0
                     episode_owl_cache.clear()
                     continue
