@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import random
+import math
 
-from .detector import Detection, SemanticDetector
-
+from .detector import SemanticDetector
 
 Action = int
 UP = 0
@@ -16,22 +16,25 @@ RIGHT = 3
 @dataclass(frozen=True)
 class SceneObject:
     label: str
-    x: int
-    y: int
+    x: float  # Coordinate continue
+    y: float  # Coordinate continue
     color: tuple[float, float, float]
+    radius: float = 0.35  # Raggio fisico di ingombro dell'ostacolo
 
-
-class GridWorldEnv:
+class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
     def __init__(self, size: int = 7, seed: int = 7, detector: SemanticDetector | None = None) -> None:
-        self.size = size
+        self.size = float(size)  # L'arena diventa uno spazio continuo float (es. da 0.0 a 7.0)
         self.random = random.Random(seed)
         self.detector = detector or SemanticDetector()
         self.target_label = "chair"
-        self.agent_x = 0
-        self.agent_y = 0
+        
+        self.agent_x = 0.0
+        self.agent_y = 0.0
+        self.agent_radius = 0.25  # Raggio fisico dell'agente cubo
+        self.step_size = 0.25     # Di quanto si sposta l'agente ad ogni azione discreta
         self.objects: list[SceneObject] = []
 
-    def reset(self) -> tuple[int, int, int, int, int, int, int]:
+    def reset(self) -> tuple[float, float, float, float, float, float, float]:
         object_specs = [
             ("chair", (0.1, 0.7, 0.2)),
             ("table", (0.2, 0.4, 0.9)),
@@ -41,75 +44,90 @@ class GridWorldEnv:
             ("table", (0.2, 0.4, 0.9)),
             ("lamp", (0.9, 0.7, 0.2)),
         ]
-        positions = self._sample_positions(len(object_specs) + 1)
+        
+        # Genera posizioni float non sovrapposte
+        positions = self._sample_continuous_positions(len(object_specs) + 1)
         self.agent_x, self.agent_y = positions[0]
         
         self.objects = [
-            SceneObject(label=label, x=position[0], y=position[1], color=color)
-            for (label, color), position in zip(object_specs, positions[1:])
+            SceneObject(label=label, x=pos[0], y=pos[1], color=color)
+            for (label, color), pos in zip(object_specs, positions[1:])
         ]
         return self._observation()
 
-    def step(self, action: Action) -> tuple[tuple[int, int, int, int, int, int, int], float, bool, dict[str, object]]:
+    def step(self, action: Action) -> tuple[tuple[float, float, float, float, float, float, float], float, bool, dict[str, object]]:
         target = self._target_object()
-        previous_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
-        previous_position = (self.agent_x, self.agent_y)
+        prev_dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
 
-        new_x, new_y = self.agent_x, self.agent_y
-        if action == UP:
-            new_y = max(0, self.agent_y - 1)
-        elif action == DOWN:
-            new_y = min(self.size - 1, self.agent_y + 1)
-        elif action == LEFT:
-            new_x = max(0, self.agent_x - 1)
-        elif action == RIGHT:
-            new_x = min(self.size - 1, self.agent_x + 1)
+        # Calcolo lo spostamento potenziale in base all'azione discreta scelta
+        next_x, next_y = self.agent_x, self.agent_y
+        if action == UP:    next_y -= self.step_size
+        elif action == DOWN:  next_y += self.step_size
+        elif action == LEFT:  next_x -= self.step_size
+        elif action == RIGHT: next_x += self.step_size
 
-        hit_distractor = any(
-            obj.label != self.target_label and new_x == obj.x and new_y == obj.y
-            for obj in self.objects
-        )
+        # Limiti fisici dell'arena tenendo conto del raggio dell'agente
+        next_x = max(self.agent_radius, min(self.size - self.agent_radius, next_x))
+        next_y = max(self.agent_radius, min(self.size - self.agent_radius, next_y))
 
-        if hit_distractor:
+        # Controllo geometrico collisioni con ostacoli (esclusa la sedia)
+        hit_obstacle = False
+        for obj in self.objects:
+            if obj.label != self.target_label:
+                dist_to_obj = math.hypot(next_x - obj.x, next_y - obj.y)
+                if dist_to_obj < (self.agent_radius + obj.radius):
+                    hit_obstacle = True
+                    break
+
+        if hit_obstacle:
             reward = -1.0
             done = False
+            # Se sbatte, resta fermo dov'era prima
         else:
-            self.agent_x, self.agent_y = new_x, new_y
-            current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
-            done = self.agent_x == target.x and self.agent_y == target.y
+            self.agent_x, self.agent_y = next_x, next_y
+            curr_dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
             
-            # Forte penalità per ogni passo per incoraggiare percorsi brevi
-            reward = -0.1 + 0.05 * (previous_distance - current_distance)
-            if previous_position == (self.agent_x, self.agent_y):
-                reward -= 0.2
+            # Condizione di arrivo: tocca la sedia
+            done = curr_dist < (self.agent_radius + target.radius)
+            
+            # Reward shaping continuo
+            reward = -0.05 + 0.1 * (prev_dist - curr_dist)
             if done:
-                reward = 1.0
+                reward = 2.0
 
         info = {"target_label": target.label, "target_position": (target.x, target.y)}
         return self._observation(), reward, done, info
 
-    def _observation(self) -> tuple[int, int, int, int, int, int, int]:
-        detection = self.detector.detect(self.objects, (self.agent_x, self.agent_y), self.target_label)
-        danger_up = int(any(
-            obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y - 1
-            for obj in self.objects
-        ))
-        danger_down = int(any(
-            obj.label != self.target_label and obj.x == self.agent_x and obj.y == self.agent_y + 1
-            for obj in self.objects
-        ))
-        danger_left = int(any(
-            obj.label != self.target_label and obj.x == self.agent_x - 1 and obj.y == self.agent_y
-            for obj in self.objects
-        ))
-        danger_right = int(any(
-            obj.label != self.target_label and obj.x == self.agent_x + 1 and obj.y == self.agent_y
-            for obj in self.objects
-        ))
-        return (
-            detection.dx, detection.dy, int(detection.visible),
-            danger_up, danger_down, danger_left, danger_right,
-        )
+    def _observation(self) -> tuple[float, float, float, float, float, float, float]:
+        target = self._target_object()
+        dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
+        
+        # Direzione float normalizzata (radar) se entro il raggio visivo
+        if dist <= 3.5:
+            dx = (target.x - self.agent_x) / dist
+            dy = (target.y - self.agent_y) / dist
+            visible = 1.0
+        else:
+            dx, dy, visible = 0.0, 0.0, 0.0
+
+        # Sensori di pericolo geometrici: controllano in avanti se l'azione porterebbe a collisione
+        danger_up = float(self._check_collision_at(self.agent_x, self.agent_y - self.step_size))
+        danger_down = float(self._check_collision_at(self.agent_x, self.agent_y + self.step_size))
+        danger_left = float(self._check_collision_at(self.agent_x - self.step_size, self.agent_y))
+        danger_right = float(self._check_collision_at(self.agent_x + self.step_size, self.agent_y))
+
+        return (dx, dy, visible, danger_up, danger_down, danger_left, danger_right)
+
+    def _check_collision_at(self, x: float, y: float) -> bool:
+        # Controlla bordi arena
+        if x < self.agent_radius or x > (self.size - self.agent_radius): return True
+        if y < self.agent_radius or y > (self.size - self.agent_radius): return True
+        # Controlla ostacoli
+        for obj in self.objects:
+            if obj.label != self.target_label:
+                if math.hypot(x - obj.x, y - obj.y) < (self.agent_radius + obj.radius):
+                    return True
+        return False
 
     def _target_object(self) -> SceneObject:
         for scene_object in self.objects:
@@ -117,14 +135,11 @@ class GridWorldEnv:
                 return scene_object
         raise RuntimeError("Target object is missing from the scene")
 
-    def _sample_positions(self, count: int) -> list[tuple[int, int]]:
-        positions: list[tuple[int, int]] = []
+    def _sample_continuous_positions(self, count: int) -> list[tuple[float, float]]:
+        positions: list[tuple[float, float]] = []
+        min_safety_dist = 0.9
         while len(positions) < count:
-            candidate = (self.random.randrange(self.size), self.random.randrange(self.size))
-            if candidate not in positions:
+            candidate = (self.random.uniform(0.5, self.size - 0.5), self.random.uniform(0.5, self.size - 0.5))
+            if all(math.hypot(candidate[0] - p[0], candidate[1] - p[1]) >= min_safety_dist for p in positions):
                 positions.append(candidate)
         return positions
-
-    @staticmethod
-    def _manhattan_distance(x1: int, y1: int, x2: int, y2: int) -> int:
-        return abs(x1 - x2) + abs(y1 - y2)

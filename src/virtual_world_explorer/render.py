@@ -74,6 +74,7 @@ from OpenGL.GL import (
     GL_SMOOTH,
     glShadeModel,
     GL_FRONT,
+    GLfloat,
 )
 
 from PIL import Image
@@ -313,24 +314,36 @@ class OpenGLRenderer:
         glEnd()
 
     def _draw_objects(self) -> None:
-        model_scale = 0.55
         for scene_object in self.env.objects:
-            model = self.models.get(scene_object.label)
-            if model is None:
-                continue
-
             glPushMatrix()
-            glTranslatef(scene_object.x + 0.5, scene_object.y + 0.5, 0.0)
-
-            model.render(target_size=model_scale)
+            # RIMOSSO "+ 0.5": Ora scene_object.x e y sono float che esprimono il centro esatto e continuo
+            glTranslatef(scene_object.x, scene_object.y, 0.0)
+            
+            model = self.models.get(scene_object.label)
+            if model:
+                model.render()
+            else:
+                glColor3f(*scene_object.color)
+                self._draw_cube(-0.25, -0.25, 0.5)
             glPopMatrix()
 
     def _draw_agent(self) -> None:
-        padding = self.config.cell_padding + 0.04
-        glDisable(GL_TEXTURE_2D)
-        glColor3f(0.95, 0.95, 0.95)
-        side = 1.0 - (padding * 2)
-        self._draw_cube(self.env.agent_x + padding, self.env.agent_y + padding, side)
+        glPushMatrix()
+        # RIMOSSO "+ 0.5": Anche l'agente è guidato dalle coordinate float continue reali dell'ambiente
+        glTranslatef(self.env.agent_x, self.env.agent_y, 0.0)
+        
+        glEnable(GL_LIGHTING)
+        glEnable(GL_LIGHT0)
+        
+        # Materiale bianco per reagire alle luci
+        white_material = [1.0, 1.0, 1.0, 1.0]
+        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (GLfloat * 4)(*white_material))
+        
+        side = self.env.agent_radius * 2  # Il cubo scala proporzionalmente al suo raggio fisico (0.50 totale)
+        self._draw_cube(-side / 2, -side / 2, side)
+        
+        glDisable(GL_LIGHTING)
+        glPopMatrix()
 
     def _draw_hud_overlay(self, lines: list[str]) -> None:
         if self.window is None:

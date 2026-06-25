@@ -1,34 +1,70 @@
 from __future__ import annotations
 
-from collections import defaultdict
 import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
+State = tuple[float, ...]
 
-State = tuple[int, ...]
+class QNetwork(nn.Module):
+    def __init__(self, input_dim: int = 7, output_dim: int = 4):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, output_dim)
+        )
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
 
-
-class QLearningAgent:
-    def __init__(self, actions: int = 4, alpha: float = 0.1, gamma: float = 0.9, epsilon: float = 1.0) -> None:
+class QLearningAgent:  # Manteniamo lo stesso nome per compatibilità con main.py
+    def __init__(self, actions: int = 4, alpha: float = 0.001, gamma: float = 0.9, epsilon: float = 1.0) -> None:
         self.actions = actions
-        self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.random = random.Random(13)
-        # Inizializziamo a 0.0 invece che 1.0 per evitare che le azioni inesplorate
-        # sembrino migliori di quelle che portano al target (che valgono meno di 1.0 a causa del discount).
-        self.q_values = defaultdict(lambda: [0.0 for _ in range(self.actions)])
+        
+        # Reti neurali per DQN
+        self.policy_net = QNetwork(input_dim=7, output_dim=actions)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=alpha)
+        self.loss_fn = nn.MSELoss()
 
     def choose_action(self, state: State) -> int:
         if self.random.random() < self.epsilon:
             return self.random.randrange(self.actions)
-        values = self.q_values[state]
-        return max(range(self.actions), key=lambda action: values[action])
+        
+        with torch.no_grad():
+            state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+            q_values = self.policy_net(state_t)
+            return int(q_values.argmax(dim=1).item())
 
     def learn(self, state: State, action: int, reward: float, next_state: State, done: bool) -> None:
-        current = self.q_values[state][action]
-        next_best = 0.0 if done else max(self.q_values[next_state])
-        target = reward + self.gamma * next_best
-        self.q_values[state][action] = current + self.alpha * (target - current)
+        state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        next_state_t = torch.tensor(next_state, dtype=torch.float32).unsqueeze(0)
+        
+        # AGGIUSTAMENTO FORMALISMO DIMENSIONI (Risolve il Warning del Loss)
+        # Squeeze e unsqueeze espliciti mantengono le shape della loss a [1]
+        current_q = self.policy_net(state_t)[0][action].unsqueeze(0) 
+        reward_t = torch.tensor([reward], dtype=torch.float32)
+        
+        with torch.no_grad():
+            if done:
+                target_q = reward_t
+            else:
+                target_q = reward_t + self.gamma * self.policy_net(next_state_t).max(dim=1)[0]
+                
+        # Ora sia current_q che target_q hanno dimensione torch.Size([1])
+        loss = self.loss_fn(current_q, target_q)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
+    # AGGIUSTAMENTO ARGOMENTO METODO (Risolve il TypeError)
+    # Cambiato il nome del parametro da min_epsilon a minimum per combaciare con main.py
     def decay_exploration(self, minimum: float = 0.05, factor: float = 0.997) -> None:
         self.epsilon = max(minimum, self.epsilon * factor)
