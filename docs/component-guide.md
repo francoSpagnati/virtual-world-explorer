@@ -78,7 +78,7 @@ virtual-world-explorer/
 |---|---|---|
 | Proiezione | `glOrtho` (ortografica) | Doppia: `glFrustum` (utente), `glOrtho` (AI) |
 | Profondità | Nessuna | `GL_DEPTH_TEST`, `GL_DEPTH_BUFFER_BIT` |
-| Agente | `glRectf` (quadrato 2D) | `_draw_cube()` (6 `GL_QUADS` + normals → cubo 3D con luce) |
+| Agente | `glRectf` (quadrato 2D) | Modello 3D Robot texturizzato (`Robot.obj`) scalato automaticamente |
 | Oggetti | `glRectf` colorati | Modelli 3D OBJ (da 60 a 394 facce) con texture o materiali MTL |
 | Camera | Dall'alto (top-down) | Doppia: Fissa inclinata (-55° su X) per utente, Egocentrica per AI |
 | Illuminazione | Nessuna | `GL_LIGHT0` + `GL_NORMALIZE` + `glMaterialfv` |
@@ -95,7 +95,7 @@ virtual-world-explorer/
 | `_draw_grid()` | Griglia con `GL_LINES` (converte la dimensione `float` dell'ambiente in `int` per la generazione delle linee). |
 | `_draw_cube()` | Cubo solido con 6 `GL_QUADS` + normals per-face (usato per l'agente). |
 | `_draw_objects()` | Itera `SceneObject`, carica `Model3D.render()` con push/pop matrix. |
-| `_draw_agent()` | Imposta materiale bianco, disegna cubo agente. |
+| `_draw_agent()` | Renderizza il modello `Robot.obj` usando l'architettura dinamica di `Model3D.render()`. Fallback automatico sul cubo bianco. |
 | `_setup_camera()` | Imposta la telecamera in due modalità. **Utente**: usa un offset preciso (`-10.5` su Z, poi ruota di `-55°`, poi trasla di `-3.5` su X/Y) per centrare perfettamente la scacchiera sullo schermo. **Egocentrica**: usa le coordinate esatte `float` dell'agente. |
 | `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità). |
 | `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf`. |
@@ -161,7 +161,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | Classe / Metodo | Cosa fa |
 |---|---|
 | `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace, sfruttando automaticamente accelerazione hardware GPU (CUDA/MPS). |
-| `detect_target_multiview(images, target_names)` | Riceve il batch delle 4 telecamere per effettuare scansione a 360°. Sfrutta i target secondari ("table", "lamp") come filtri negativi per annullare i falsi positivi e restituisce le coordinate globali `dx`, `dy`. |
+| `detect_target_multiview(images, target_names)` | Effettua scansione a 360°. Sfrutta i target secondari e una threshold di `0.10` per annullare i falsi positivi e restituisce coordinate globali `dx`, `dy` (successivamente normalizzate in `main.py`). |
 
 **Nota Architetturale Sulla Latenza:** L'integrazione è **sincrona** rispetto al movimento, ma l'impatto prestazionale è abbattuto grazie alla **cache posizionale**. Dal momento che la scena è statica per l'intero episodio, l'inferenza (pesante ma ottimizzata dal *batching*) viene lanciata al massimo una sola volta per ogni coordinata (x, y) calpestata fornendo una percezione perfetta a 360°. Tornare su celle note costa zero, rendendo fluidissime le manovre di momentum esplorativo.
 

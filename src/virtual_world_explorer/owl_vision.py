@@ -13,7 +13,7 @@ class OwlVisionDetector:
         self.model = OwlViTForObjectDetection.from_pretrained(model_name).to(self.device)
         print("[OWL-ViT] Modello caricato con successo.")
 
-    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.03) -> tuple[int, int, bool]:
+    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.10) -> tuple[int, int, bool]:
         """
         Analizza un batch di immagini (NORD, SUD, OVEST, EST) e cerca il target primario.
         L'utilizzo di target multipli (es. ["chair", "table", "lamp"]) previene i falsi positivi

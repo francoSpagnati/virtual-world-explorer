@@ -135,6 +135,7 @@ class OpenGLRenderer:
             "chair": "assets/models/chair/Chair.obj",
             "lamp": "assets/models/lamp/Standing_lamp_01.obj",
             "table": "assets/models/table/model.obj",
+            "agent": "assets/models/robot/1332 Robot.obj",
         }
         for label, path in model_paths.items():
             if os.path.exists(path):
@@ -201,7 +202,7 @@ class OpenGLRenderer:
         
         self._draw_hud_overlay([
             f"TARGET: {self.env.target_label.upper()}",
-            f"AGENT: {self.env.agent_x}, {self.env.agent_y}",
+            f"AGENT: {self.env.agent_x:.2f}, {self.env.agent_y:.2f}",
             f"VISIBLE: {self.env.detector.detect(self.env.objects, (self.env.agent_x, self.env.agent_y), self.env.target_label).visible}",
         ])
         glfw.swap_buffers(self.window)
@@ -341,7 +342,15 @@ class OpenGLRenderer:
         glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (GLfloat * 4)(*white_material))
         
         side = self.env.agent_radius * 2  # Il cubo scala proporzionalmente al suo raggio fisico (0.50 totale)
-        self._draw_cube(-side / 2, -side / 2, side)
+        
+        model = self.models.get("agent")
+        if model:
+            glPushMatrix()
+            # Non applichiamo rotazioni aggiuntive in quanto model3d.py converte già da Y-up a Z-up.
+            model.render(target_size=side)
+            glPopMatrix()
+        else:
+            self._draw_cube(-side / 2, -side / 2, side)
         
         glDisable(GL_LIGHTING)
         glPopMatrix()

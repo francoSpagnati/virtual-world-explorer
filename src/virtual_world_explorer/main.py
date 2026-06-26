@@ -122,8 +122,14 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
 
                     current_state = list(state)
                     if owl_result["visible"]:
-                        current_state[0] = owl_result["dx"]
-                        current_state[1] = owl_result["dy"]
+                        dx, dy = owl_result["dx"], owl_result["dy"]
+                        length = math.hypot(dx, dy)
+                        if length > 0:
+                            current_state[0] = float(dx) / length
+                            current_state[1] = float(dy) / length
+                        else:
+                            current_state[0] = 0.0
+                            current_state[1] = 0.0
                     current_state[2] = int(owl_result["visible"])
                     state = tuple(current_state)
 
@@ -211,7 +217,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
         
         # Momentum: se non vede il bersaglio (state[2] == 0.0)
         if state[2] == 0.0 and last_action is not None and action == last_action:
-            score += 0.5
+            score += 2.0
             
         if next_position == current_position:
             score -= 2.0
