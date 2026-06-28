@@ -63,8 +63,12 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
 
 
 def _update_owl_vision_state(env: GridWorldEnv, renderer: OpenGLRenderer, agent_pos: tuple[float, float], episode_owl_cache: dict) -> None:
-    if agent_pos in episode_owl_cache:
-        owl_result.update(episode_owl_cache[agent_pos])
+    # DISCRETIZZAZIONE DELLA CACHE: Arrotondiamo al decimo di unità (es: 1.23 -> 1.2)
+    # Evita di invalidare la cache OWL-ViT per spostamenti infinitesimali continui
+    discretized_pos = (round(agent_pos[0], 1), round(agent_pos[1], 1))
+
+    if discretized_pos in episode_owl_cache:
+        owl_result.update(episode_owl_cache[discretized_pos])
         return
 
     frames_list = renderer.capture_frame()
@@ -88,7 +92,8 @@ def _update_owl_vision_state(env: GridWorldEnv, renderer: OpenGLRenderer, agent_
         
     res = owl_result_queue.get()
     owl_result.update(res)
-    episode_owl_cache[agent_pos] = res
+    # Salviamo nella cache usando le coordinate approssimate
+    episode_owl_cache[discretized_pos] = res
 
 
 def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None, max_episodes: int | None = 5) -> None:
@@ -178,26 +183,36 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
         renderer.shutdown()
 
 
-def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float]:
-    """Prevede la posizione float futura dell'agente per l'euristica anti-loop."""
-    x, y = env.agent_x, env.agent_y
-    step_size = 0.25  # Allineato con il valore in env.py
+def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float, float]:
+    """Prevede (x, y, theta) futuri dell'agente considerando la cinematica rotazionale."""
+    x, y, theta = env.agent_x, env.agent_y, env.agent_theta
     
-    if action == 0:    y -= step_size
-    elif action == 1:  y += step_size
-    elif action == 2:  x -= step_size
-    elif action == 3:  x += step_size
+    # Allineato alle costruttore cinematico continuo di env.py
+    step_size = 0.20  
+    turn_size = 0.26  
+    
+    if action == 0:    # FORWARD
+        x += step_size * math.cos(theta)
+        y += step_size * math.sin(theta)
+    elif action == 1:  # BACKWARD
+        x -= step_size * math.cos(theta)
+        y -= step_size * math.sin(theta)
+    elif action == 2:  # TURN_LEFT
+        theta = (theta + turn_size) % (2 * math.pi)
+    elif action == 3:  # TURN_RIGHT
+        theta = (theta - turn_size) % (2 * math.pi)
         
-    # Applica i limiti dell'arena tenendo conto del raggio dell'agente
+    # Applica i limiti fisici dell'arena
     x = max(env.agent_radius, min(env.size - env.agent_radius, x))
     y = max(env.agent_radius, min(env.size - env.agent_radius, y))
     
-    # Se va a sbattere contro un ostacolo, l'ambiente lo lascerà fermo
+    # Se la mossa genera una collisione, l'ambiente bloccherà l'agente sulle vecchie coordinate
     for obj in env.objects:
         if obj.label != env.target_label:
             if math.hypot(x - obj.x, y - obj.y) < (env.agent_radius + obj.radius):
-                return (env.agent_x, env.agent_y)
-    return x, y
+                return (env.agent_x, env.agent_y, env.agent_theta)
+                
+    return x, y, theta
 
 
 def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], agent: QLearningAgent, recent_positions: list[tuple[float, float]], last_action: int | None = None) -> int:
@@ -212,19 +227,18 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
     best_action = ranked_actions[0]
     best_score = float("-inf")
     for action in ranked_actions:
-        next_position = _preview_position(env, action)
+        next_x, next_y, _ = _preview_position(env, action)
         score = values[action]
         
-        # Momentum: se non vede il bersaglio (state[2] == 0.0)
+        # Momentum: premia l'avanzamento dritto se l'obiettivo non è visibile
         if state[2] == 0.0 and last_action is not None and action == last_action:
             score += 2.0
             
-        if next_position == current_position:
-            score -= 2.0
+        if (next_x, next_y) == current_position and action in (0, 1):
+            score -= 2.0 # Penalizza se provi ad andare avanti/indietro ma sbatti
             
-        # Controllo di prossimità continua anziché uguaglianza perfetta
-        # Se la posizione futura è vicina a una recentemente visitata (tolleranza 0.2), penalizza
-        visit_count = sum(1 for pos in recent_positions if math.hypot(next_position[0] - pos[0], next_position[1] - pos[1]) < 0.2)
+        # Tolleranza di prossimità continua per l'anti-loop (0.25 unità)
+        visit_count = sum(1 for pos in recent_positions if math.hypot(next_x - pos[0], next_y - pos[1]) < 0.25)
         if visit_count > 0:
             score -= 3.0 * visit_count
             

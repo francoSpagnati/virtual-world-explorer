@@ -64,16 +64,13 @@ from OpenGL.GL import (
     GL_NORMALIZE,
     GL_COLOR_MATERIAL,
     glColorMaterial,
-    GL_DIFFUSE,
-    GL_SPECULAR,
-    GL_FRONT_AND_BACK,
-    GL_AMBIENT_AND_DIFFUSE,
     glMaterialfv,
     glLightfv,
-    GL_FLAT,
     GL_SMOOTH,
     glShadeModel,
     GL_FRONT,
+    GL_FRONT_AND_BACK,
+    GL_AMBIENT_AND_DIFFUSE,
     GLfloat,
 )
 
@@ -148,13 +145,7 @@ class OpenGLRenderer:
             else:
                 print(f"[Model3D] WARNING: {path} non trovato")
 
-
-
     def capture_frame(self) -> list[np.ndarray] | None:
-        """
-        Esegue 4 rendering prospettici 3D dalle coordinate dell'agente 
-        (uno per ogni direzione: 0=Nord, 1=Sud, 2=Ovest, 3=Est) e restituisce una lista di 4 frame.
-        """
         if self.window is None:
             return None
 
@@ -162,18 +153,12 @@ class OpenGLRenderer:
         width, height = self.config.window_size, self.config.window_size
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
 
-        # Scansione sulle 4 direzioni orizzontali
         for direction in range(4):
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            
-            # Chiamiamo setup_camera con egocentric=True passando la direzione corrente
             self._setup_camera(egocentric=True, direction=direction)
-            
-            # Disegniamo il mondo (Griglia + Oggetti)
             self._draw_grid()
             self._draw_objects()
             
-            # Catturiamo i pixel di questa direzione
             data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
             image_array = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
             image_array = np.flipud(image_array)
@@ -193,16 +178,18 @@ class OpenGLRenderer:
             return
             
         glfw.poll_events()
-        
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         self._setup_camera(egocentric=False)
         self._draw_grid()
         self._draw_objects()
         self._draw_agent()
         
+        # Converte l'angolo in gradi per l'HUD leggibile
+        agent_deg = math.degrees(getattr(self.env, "agent_theta", 0.0)) % 360
+        
         self._draw_hud_overlay([
             f"TARGET: {self.env.target_label.upper()}",
-            f"AGENT: {self.env.agent_x:.2f}, {self.env.agent_y:.2f}",
+            f"AGENT: {self.env.agent_x:.2f}, {self.env.agent_y:.2f} | {agent_deg:.0f} DEG",
             f"VISIBLE: {self.env.detector.detect(self.env.objects, (self.env.agent_x, self.env.agent_y), self.env.target_label).visible}",
         ])
         glfw.swap_buffers(self.window)
@@ -215,7 +202,6 @@ class OpenGLRenderer:
         far_val = 50.0
 
         if egocentric:
-            # Nuova telecamera dell'IA: Prospettica (3D) con FOV ampio per analizzare la scena
             fov = 90.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -224,27 +210,29 @@ class OpenGLRenderer:
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
             
-            # Posizionamento ad altezza occhi dell'agente (az = 0.4 per stare sopra il pavimento)
             ax = self.env.agent_x
             ay = self.env.agent_y
             az = 0.4
             
-            # Ruotiamo l'inquadratura in base alla direzione di scansione passata da capture_frame
-            if direction == 0:    # NORD (verso -Y)
-                glRotatef(-90.0, 1.0, 0.0, 0.0)
-                glRotatef(180.0, 0.0, 0.0, 1.0)
-            elif direction == 1:  # SUD (verso +Y)
-                glRotatef(-90.0, 1.0, 0.0, 0.0)
-            elif direction == 2:  # OVEST (verso -X)
-                glRotatef(-90.0, 1.0, 0.0, 0.0)
-                glRotatef(-90.0, 0.0, 0.0, 1.0)
-            elif direction == 3:  # EST (verso +X)
-                glRotatef(-90.0, 1.0, 0.0, 0.0)
-                glRotatef(90.0, 0.0, 0.0, 1.0)
+            # Calcoliamo l'angolo di osservazione basato sull'orientamento del corpo del robot (agent_theta)
+            # In questo modo i 4 frame ruotano solidalmente con il robot
+            base_theta = getattr(self.env, "agent_theta", 0.0)
+            base_deg = math.degrees(base_theta)
+
+            glRotatef(-90.0, 1.0, 0.0, 0.0)  # Passaggio a Z-up globale
+            
+            # Le 4 viste (0=Avanti, 1=Dietro, 2=Sinistra, 3=Destra) relative allo sguardo del robot
+            if direction == 0:    # FRONTALE (Direzione agent_theta)
+                glRotatef(-90.0 - base_deg, 0.0, 0.0, 1.0)
+            elif direction == 1:  # POSTERIORE
+                glRotatef(90.0 - base_deg, 0.0, 0.0, 1.0)
+            elif direction == 2:  # SINISTRA
+                glRotatef(-base_deg, 0.0, 0.0, 1.0)
+            elif direction == 3:  # DESTRA
+                glRotatef(180.0 - base_deg, 0.0, 0.0, 1.0)
                 
             glTranslatef(-ax, -ay, -az)
         else:
-            # IL TUO CODICE ORIGINALE IDENTICO PER L'UTENTE UMANO (Vista dall'alto inclinata)
             fov = 45.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -277,37 +265,31 @@ class OpenGLRenderer:
         z_bottom = 0.0
         z_top = size
         glBegin(GL_QUADS)
-        # Superiore (normale +Z)
         glNormal3f(0, 0, 1)
         glVertex3f(x, y, z_top)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x, y + size, z_top)
-        # Inferiore (normale -Z)
         glNormal3f(0, 0, -1)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y, z_bottom)
-        # Frontale (normale -Y)
         glNormal3f(0, -1, 0)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x, y, z_top)
-        # Destra (normale +X)
         glNormal3f(1, 0, 0)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x + size, y, z_top)
-        # Posteriore (normale +Y)
         glNormal3f(0, 1, 0)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y + size, z_top)
         glVertex3f(x + size, y + size, z_top)
-        # Sinistra (normale -X)
         glNormal3f(-1, 0, 0)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y, z_bottom)
@@ -318,7 +300,6 @@ class OpenGLRenderer:
     def _draw_objects(self) -> None:
         for scene_object in self.env.objects:
             glPushMatrix()
-            # RIMOSSO "+ 0.5": Ora scene_object.x e y sono float che esprimono il centro esatto e continuo
             glTranslatef(scene_object.x, scene_object.y, 0.0)
             
             model = self.models.get(scene_object.label)
@@ -331,22 +312,24 @@ class OpenGLRenderer:
 
     def _draw_agent(self) -> None:
         glPushMatrix()
-        # RIMOSSO "+ 0.5": Anche l'agente è guidato dalle coordinate float continue reali dell'ambiente
         glTranslatef(self.env.agent_x, self.env.agent_y, 0.0)
+        
+        # ROTAZIONE VISIVA: Ruota il modello 3D sull'asse Z (up in OpenGL per questa scacchiera)
+        # in base all'angolo di imbardata (yaw) memorizzato in agent_theta
+        agent_theta = getattr(self.env, "agent_theta", 0.0)
+        glRotatef(math.degrees(agent_theta), 0.0, 0.0, 1.0)
         
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         
-        # Materiale bianco per reagire alle luci
         white_material = [1.0, 1.0, 1.0, 1.0]
         glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, (GLfloat * 4)(*white_material))
         
-        side = self.env.agent_radius * 2  # Il cubo scala proporzionalmente al suo raggio fisico (0.50 totale)
+        side = self.env.agent_radius * 2
         
         model = self.models.get("agent")
         if model:
             glPushMatrix()
-            # Non applichiamo rotazioni aggiuntive in quanto model3d.py converte già da Y-up a Z-up.
             model.render(target_size=side)
             glPopMatrix()
         else:
@@ -368,7 +351,7 @@ class OpenGLRenderer:
         glLoadIdentity()
         start_x = 12.0
         start_y = self.config.window_size - 14.0
-        panel_width = 165.0
+        panel_width = 210.0  # Allargato leggermente per ospitare i gradi
         panel_height = 30.0
         glColor3f(0.05, 0.05, 0.07)
         glRectf(start_x - 6.0, start_y + 8.0, start_x + panel_width, start_y - panel_height)
@@ -416,6 +399,9 @@ _GLYPHS: dict[str, tuple[str, ...]] = {
     "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
     "V": ("10001", "10001", "10001", "10001", "01010", "01010", "00100"),
     "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "|": ("00100", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+    ".": ("00000", "00000", "00000", "00000", "00000", "00100", "00100"),
     ":": ("00000", "00100", "00100", "00000", "00100", "00100", "00000"),
     ",": ("00000", "00000", "00000", "00000", "00100", "00100", "01000"),
     "0": ("01110", "10011", "10101", "10101", "10101", "11001", "01110"),

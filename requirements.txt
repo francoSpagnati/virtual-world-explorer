@@ -5,3 +5,4 @@ numpy
 trimesh
 torch
 transformers
+scipy
