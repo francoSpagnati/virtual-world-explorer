@@ -1,4 +1,5 @@
 import torch
+import math
 from PIL import Image
 from transformers import OwlViTProcessor, OwlViTForObjectDetection
 
@@ -13,12 +14,10 @@ class OwlVisionDetector:
         self.model = OwlViTForObjectDetection.from_pretrained(model_name).to(self.device)
         print("[OWL-ViT] Modello caricato con successo.")
 
-    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.10) -> tuple[int, int, bool]:
+    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.10) -> tuple[float, float, bool]:
         """
-        Analizza un batch di immagini (NORD, SUD, OVEST, EST) e cerca il target primario.
-        L'utilizzo di target multipli (es. ["chair", "table", "lamp"]) previene i falsi positivi
-        permettendo al modello di distinguere gli oggetti.
-        Restituisce (global_dx, global_dy, visible).
+        Analizza un batch di 8 immagini a 360° gradi e cerca il target primario.
+        Restituisce vettori continui (global_dx, global_dy, visible).
         """
         text_queries = [f"an object that is a {name}" for name in target_names]
         texts = [text_queries] * len(images)
@@ -43,52 +42,41 @@ class OwlVisionDetector:
             labels = res["labels"]
             
             for i, score in enumerate(scores):
-                # Controlliamo solo il target primario (label == 0)
                 if labels[i] == 0 and score.item() > best_score:
                     best_score = score.item()
                     best_box = boxes[i].tolist()
                     best_image_idx = img_idx
                     
         if best_image_idx == -1:
-            print("[OWL-ViT] Nessun target primario trovato nelle 4 direzioni")
-            return 0, 0, False
+            print(f"[OWL-ViT] Nessun target primario trovato nelle {len(images)} direzioni")
+            return 0.0, 0.0, False
             
         print(f"[OWL-ViT] Trovato '{target_names[0]}' con confidenza {best_score:.3f} nella telecamera {best_image_idx}")
         
-        img_w, img_h = images[best_image_idx].size
-        center_x, center_y = img_w / 2.0, img_h / 2.0
-        
+        img_w, _ = images[best_image_idx].size
+        center_x = img_w / 2.0
         box_center_x = (best_box[0] + best_box[2]) / 2.0
-        margin_x = img_w * 0.05
         
-        local_dx = 0
-        if box_center_x < center_x - margin_x:
-            local_dx = -1
-        elif box_center_x > center_x + margin_x:
-            local_dx = 1
-            
-        local_dy = 1
+        # Calcolo dell'orientamento globale continuo basato sull'indice della telecamera
+        # 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SO, 6=O, 7=NO
+        # Angoli di orientamento mondo: N=270° (-90°), E=0°, S=90°, O=180°
+        base_angle_deg = (best_image_idx * 45.0) - 90.0
         
-        # Mappatura globale basata sull'indice della telecamera (0=N, 1=S, 2=W, 3=E)
-        if best_image_idx == 0:
-            global_dx = local_dx
-            global_dy = -local_dy
-        elif best_image_idx == 1:
-            global_dx = -local_dx
-            global_dy = local_dy
-        elif best_image_idx == 2:
-            global_dx = -local_dy
-            global_dy = -local_dx
-        else:
-            global_dx = local_dy
-            global_dy = local_dx
+        # Offset orizzontale all'interno del frame (FOV di 90 gradi totale, quindi max offset = ±45 gradi)
+        offset_fraction = (box_center_x - center_x) / center_x
+        local_offset_deg = offset_fraction * 45.0
+        
+        global_angle_deg = base_angle_deg + local_offset_deg
+        global_angle_rad = math.radians(global_angle_deg)
+        
+        # Conversione in coordinate cartesiane normalizzate
+        global_dx = math.cos(global_angle_rad)
+        global_dy = math.sin(global_angle_rad)
             
         return global_dx, global_dy, True
 
 if __name__ == "__main__":
-    # Piccolo script di test per provare che si inizializzi e non dia errori
     detector = OwlVisionDetector()
-    
-    test_images = [Image.new('RGB', (720, 720), color = 'white') for _ in range(4)]
+    test_images = [Image.new('RGB', (720, 720), color = 'white') for _ in range(8)]
     dx, dy, vis = detector.detect_target_multiview(test_images, ["chair", "table"])
-    print(f"Risultato test finto: dx={dx}, dy={dy}, visible={vis}")
+    print(f"Risultato test 8-cam: dx={dx:.3f}, dy={dy:.3f}, visible={vis}")
