@@ -12,7 +12,7 @@ class Detection:
 
 
 class SemanticDetector:
-    def __init__(self, vision_radius: int = 3) -> None:
+    def __init__(self, vision_radius: float = 5.0) -> None:
         self.vision_radius = vision_radius
 
     def detect(self, objects: list[object], agent_position: tuple[int, int], target_label: str) -> Detection:
