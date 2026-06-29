@@ -14,7 +14,7 @@ class OwlVisionDetector:
         self.model = OwlViTForObjectDetection.from_pretrained(model_name).to(self.device)
         print("[OWL-ViT] Modello caricato con successo.")
 
-    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.2) -> tuple[float, float, bool]:
+    def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.25) -> tuple[float, float, bool]:
         """
         Analizza un batch di 8 immagini a 360° gradi e cerca il target primario.
         Restituisce vettori continui (global_dx, global_dy, visible).
