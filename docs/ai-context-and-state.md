@@ -16,7 +16,7 @@ Il rendering *deve* avvenire manipolando direttamente lo stato OpenGL tramite `P
 
 ## 3. Stato Attuale del Progetto (Configurazione)
 Il progetto è in uno stato avanzato e pienamente funzionante, configurato come segue:
-- **Agente RL (Tuning):** `agent.py` utilizza Deep Q-Learning (DQN) con PyTorch. L'addestramento è configurato per 3500 episodi in main.py (di base 30000) per permettere all'agente di padroneggiare mappe molto congestionate (ora con 6 ostacoli invece di 2). I Q-values sono predetti da una rete neurale, eliminando la necessità di una Q-table fissa e garantendo maggiore generalizzazione continua. Il limite di mosse impedisce percorsi infiniti e le penalità forzano percorsi ottimali.
+- **Agente RL (Tuning):** `agent.py` utilizza Deep Q-Learning (DQN) con PyTorch. L'addestramento è configurato per 30000 episodi in main.py per permettere all'agente di padroneggiare mappe molto congestionate (ora con 6 ostacoli invece di 2). I Q-values sono predetti da una rete neurale, eliminando la necessità di una Q-table fissa e garantendo maggiore generalizzazione continua. Il limite di mosse impedisce percorsi infiniti e le penalità forzano percorsi ottimali.
 - **Spazio di Stato Ottimizzato (7-D):** L'agente percepisce il mondo tramite una tupla relativa continua: `(dx_target, dy_target, visible, danger_up, danger_down, danger_left, danger_right)`. Le coordinate assolute sono state rimosse. I sensori di prossimità (`danger_*`) si sono dimostrati formidabili.
 - **Sensore Logico & Momentum:** `vision_radius` è impostata a 3.0. Quando l'agente non vede la sedia (visible=0), usa una logica di "Momentum" maggiorata (`score += 2.0`) in `main.py` per forzare l'esplorazione in linea retta ed evitare minimi locali causati dal reward shaping.
 - **Motore 3D a Doppia Telecamera e Spazio Continuo:** `render.py` adotta un'ingegnosa architettura dual-camera operante in uno spazio continuo (`float`).
@@ -28,4 +28,4 @@ Il progetto è in uno stato avanzato e pienamente funzionante, configurato come 
 ## 4. Cosa Manca / Prossimi Passi
 Per completare la visione finale e raggiungere l'obiettivo del progetto, mancano le seguenti espansioni:
 1. **Generalizzazione Spaziale:**
-   La griglia attuale è fissa a 7x7. Grazie alla rimozione delle coordinate assolute, il passaggio ad arene più grandi dovrebbe essere trasparente per l'agente, ma richiederà calibrazione sul modulo di visual-detection che dovrà scalare le bounding box 2D ottenute ai vettori direzionali 3D.
+   L'arena attuale è uno spazio continuo di 7x7 (cinematica unicycle). Grazie alla rimozione delle coordinate assolute, il passaggio ad arene più grandi dovrebbe essere trasparente per l'agente, ma richiederà calibrazione sul modulo di visual-detection che dovrà scalare le bounding box 2D ottenute ai vettori direzionali 3D.

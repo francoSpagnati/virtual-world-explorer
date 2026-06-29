@@ -7,7 +7,7 @@ come si incastrano tra loro, e le ultime evoluzioni tecniche introdotte (il pass
 
 ## Che cosa fa questo progetto?
 
-Immagina un **robottino** (l'agente) che si muove su una **scacchiera 7×7**.
+Immagina un **robottino** (l'agente) che si muove in uno **spazio continuo 7×7** (modello unicycle).
 Sulla scacchiera ci sono tre oggetti tridimensionali o testurizzati: una **sedia** (il bersaglio da raggiungere),
 un **tavolo** e una **lampada** (distrattori / ostacoli).
 
@@ -78,7 +78,7 @@ virtual-world-explorer/
 |---|---|---|
 | Proiezione | `glOrtho` (ortografica) | Doppia: `glFrustum` (utente), `glOrtho` (AI) |
 | Profondità | Nessuna | `GL_DEPTH_TEST`, `GL_DEPTH_BUFFER_BIT` |
-| Agente | `glRectf` (quadrato 2D) | Modello 3D Robot texturizzato (`Robot.obj`) scalato automaticamente |
+| Agente | `glRectf` (quadrato 2D) | Modello 3D Robot texturizzato (`Robot.obj`) scalato e ruotato (`agent_theta`) automaticamente |
 | Oggetti | `glRectf` colorati | Modelli 3D OBJ (da 60 a 394 facce) con texture o materiali MTL |
 | Camera | Dall'alto (top-down) | Doppia: Fissa inclinata (-55° su X) per utente, Egocentrica per AI |
 | Illuminazione | Nessuna | `GL_LIGHT0` + `GL_NORMALIZE` + `glMaterialfv` |
@@ -96,7 +96,7 @@ virtual-world-explorer/
 | `_draw_cube()` | Cubo solido con 6 `GL_QUADS` + normals per-face (usato per l'agente). |
 | `_draw_objects()` | Itera `SceneObject`, carica `Model3D.render()` con push/pop matrix. |
 | `_draw_agent()` | Renderizza il modello `Robot.obj` usando l'architettura dinamica di `Model3D.render()`. Fallback automatico sul cubo bianco. |
-| `_setup_camera()` | Imposta la telecamera in due modalità. **Utente**: usa un offset preciso (`-10.5` su Z, poi ruota di `-55°`, poi trasla di `-3.5` su X/Y) per centrare perfettamente la scacchiera sullo schermo. **Egocentrica**: usa le coordinate esatte `float` dell'agente. |
+| `_setup_camera()` | Imposta la telecamera in due modalità. **Utente**: usa un offset preciso (`-10.5` su Z, poi ruota di `-55°`, poi trasla di `-3.5` su X/Y) per centrare perfettamente l'arena sullo schermo. **Egocentrica**: usa le coordinate esatte `float` dell'agente e ne segue l'orientamento (`agent_theta`). |
 | `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità). |
 | `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf`. |
 | `capture_frame()` | Renderizza in back-buffer la visuale *egocentrica ortografica* dell'AI e restituisce array NumPy RGB |
@@ -144,7 +144,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation |
 | `decay_exploration(minimum=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** lr=0.0005 (Adam), γ=0.95, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 128 -> 64 -> 4) con attivazione ReLU.
+**Iperparametri:** lr=0.001 (Adam), γ=0.9, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 64 -> 32 -> 4) con attivazione ReLU.
 
 ### `detector.py` — Gli occhi dell'agente
 
@@ -186,7 +186,7 @@ main.py
   │
   ├── train_agent()
   │     ├── GridWorldEnv.reset()
-  │     ├── loop 3500 episodi:
+  │     ├── loop 30000 episodi:
   │     │     ├── QLearningAgent.choose_action()
   │     │     ├── GridWorldEnv.step()
   │     │     └── QLearningAgent.learn()
