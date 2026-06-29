@@ -236,7 +236,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
 
 
 def main() -> None:
-    env, agent = train_agent(episodes=500)
+    env, agent = train_agent(episodes=1000, max_steps=100)
     run_demo(env, agent, max_episodes=6)
 
 
