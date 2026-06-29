@@ -69,19 +69,19 @@ class OwlVisionDetector:
             
         local_dy = 1
         
-        # Mappatura globale basata sull'indice della telecamera (0=N, 1=S, 2=W, 3=E)
+        # Mappatura locale basata sull'indice della telecamera (0=Front, 1=Back, 2=Left, 3=Right)
         if best_image_idx == 0:
-            global_dx = local_dx
-            global_dy = -local_dy
-        elif best_image_idx == 1:
-            global_dx = -local_dx
-            global_dy = local_dy
-        elif best_image_idx == 2:
-            global_dx = -local_dy
+            global_dx = 1
             global_dy = -local_dx
-        else:
-            global_dx = local_dy
+        elif best_image_idx == 1:
+            global_dx = -1
             global_dy = local_dx
+        elif best_image_idx == 2:
+            global_dx = local_dx
+            global_dy = 1
+        else:
+            global_dx = -local_dx
+            global_dy = -1
             
         return global_dx, global_dy, True
 

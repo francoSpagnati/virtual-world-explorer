@@ -41,7 +41,7 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
     agent = QLearningAgent()
     
     if max_steps is None:
-        max_steps = int(env.size * env.size)
+        max_steps = 1000
 
     for episode in range(episodes):
         state = env.reset()
@@ -55,7 +55,7 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
             if done:
                 break
         # Usiamo un decadimento più lento per esplorare meglio lo spazio degli stati
-        agent.decay_exploration(minimum=0.01, factor=0.999)
+        agent.decay_exploration(minimum=0.01, factor=0.9998)
         if (episode + 1) % 500 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
 
@@ -108,7 +108,7 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
 
     try:
         state = env.reset()
-        recent_positions: list[tuple[float, float]] = []
+        recent_positions: list[tuple[float, float, float]] = []
         episode_step_count = 0
         total_step_count = 0
         last_action = None
@@ -155,7 +155,7 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                 episode_step_count += 1
                 total_step_count += 1
                 
-                max_demo_steps = env.size * env.size
+                max_demo_steps = 1000
                 
                 if done or episode_step_count >= max_demo_steps:
                     msg = f"Obiettivo raggiunto in {episode_step_count} passi!" if done else f"Limite passi raggiunto ({max_demo_steps})."
@@ -172,7 +172,7 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                     episode_owl_cache.clear()
                     continue
 
-                recent_positions.append((env.agent_x, env.agent_y))
+                recent_positions.append((env.agent_x, env.agent_y, env.agent_theta))
                 if len(recent_positions) > 20:
                     recent_positions.pop(0)
 
@@ -215,7 +215,7 @@ def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float, flo
     return x, y, theta
 
 
-def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], agent: QLearningAgent, recent_positions: list[tuple[float, float]], last_action: int | None = None) -> int:
+def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], agent: QLearningAgent, recent_positions: list[tuple[float, float, float]], last_action: int | None = None) -> int:
     # Estraiamo i valori Q dalla rete neurale DQN dell'agente
     with torch.no_grad():
         state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
@@ -227,7 +227,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
     best_action = ranked_actions[0]
     best_score = float("-inf")
     for action in ranked_actions:
-        next_x, next_y, _ = _preview_position(env, action)
+        next_x, next_y, next_theta = _preview_position(env, action)
         score = values[action]
         
         # Momentum: premia l'avanzamento dritto se l'obiettivo non è visibile
@@ -237,8 +237,8 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
         if (next_x, next_y) == current_position and action in (0, 1):
             score -= 2.0 # Penalizza se provi ad andare avanti/indietro ma sbatti
             
-        # Tolleranza di prossimità continua per l'anti-loop (0.25 unità)
-        visit_count = sum(1 for pos in recent_positions if math.hypot(next_x - pos[0], next_y - pos[1]) < 0.25)
+        # Tolleranza di prossimità continua per l'anti-loop (0.25 unità e 0.1 rad)
+        visit_count = sum(1 for pos in recent_positions if math.hypot(next_x - pos[0], next_y - pos[1]) < 0.25 and abs((next_theta - pos[2] + math.pi) % (2 * math.pi) - math.pi) < 0.1)
         if visit_count > 0:
             score -= 3.0 * visit_count
             

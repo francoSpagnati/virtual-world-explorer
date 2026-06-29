@@ -27,7 +27,7 @@ def run_test_layout(name, positions, max_steps=100):
         last_action = None
         
         for step in range(max_steps):
-            visited.append((env.agent_x, env.agent_y))
+            visited.append((env.agent_x, env.agent_y, env.agent_theta))
             
             # Use the actual action selection with momentum and anti-loop
             from src.virtual_world_explorer.main import _choose_action_without_loop

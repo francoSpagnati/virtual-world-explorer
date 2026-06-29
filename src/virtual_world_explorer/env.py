@@ -120,8 +120,11 @@ class GridWorldEnv:
         
         # Direzione float normalizzata (radar) se entro il raggio visivo
         if dist <= 3.5:
-            dx = (target.x - self.agent_x) / dist
-            dy = (target.y - self.agent_y) / dist
+            abs_dx = (target.x - self.agent_x) / dist
+            abs_dy = (target.y - self.agent_y) / dist
+            # Convert to local coordinates relative to agent's orientation
+            dx = abs_dx * math.cos(self.agent_theta) + abs_dy * math.sin(self.agent_theta)
+            dy = -abs_dx * math.sin(self.agent_theta) + abs_dy * math.cos(self.agent_theta)
             visible = 1.0
         else:
             dx, dy, visible = 0.0, 0.0, 0.0
