@@ -62,7 +62,7 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
         # Decadimento dell'esplorazione (rumore gaussiano/epsilon)
         agent.decay_exploration(minimum=0.01, factor=0.999)
         
-        if (episode + 1) % 500 == 0:
+        if (episode + 1) % 100 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
 
     return env, agent
@@ -230,7 +230,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
 
 
 def main() -> None:
-    env, agent = train_agent()
+    env, agent = train_agent(episodes=500)
     run_demo(env, agent, max_episodes=6)
 
 

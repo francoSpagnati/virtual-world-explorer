@@ -135,15 +135,17 @@ La libreria `trimesh` gestisce automaticamente il caricamento di texture, colori
 ```
 Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza traslazionale e abbattere radicalmente lo spazio degli stati.
 
-### `agent.py` — L'apprendista
+### `agent.py` — L'apprendista (DDPG)
 
-| Metodo | Cosa fa |
+| Classe / Metodo | Cosa fa |
 |---|---|
-| `choose_action(state)` | Esplorazione con rumore gaussiano: sceglie array di controllo casuale tra -1 e 1 con prob ε, altrimenti dalla rete neurale |
-| `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation sulle azioni continue |
-| `decay_exploration(minimum=0.01, factor=0.999)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
+| `ContinuousPolicyNetwork` | L'**Actor**: riceve lo stato (11-D) ed emette l'azione ottimale continua `(v, w)`. |
+| `CriticNetwork` | Il **Critic**: valuta la qualità (Q-value) di una coppia `(stato, azione)`. |
+| `ReplayBuffer` | Salva le transizioni per addestrare l'agente su batch di campioni de-correlati. |
+| `choose_action(state)` | Esplorazione con rumore gaussiano sull'output della rete attore per azioni continue. |
+| `learn(...)` | Estrae un batch dal replay buffer, ottimizza il Critic col loss di Bellman (MSE) e ottimizza l'Actor massimizzando il giudizio del Critic. Applica infine un *soft update* (Tau=0.005) ai pesi delle reti target. |
 
-**Iperparametri:** lr=0.0005 (Adam), γ=0.95, ε iniziale=1.0. Rete composta da 3 layer lineari (11 -> 128 -> 64 -> 2) con attivazione Tanh sull'output per bounding.
+**Iperparametri:** lr=0.0005 (Adam), γ=0.95, batch_size=64. L'actor usa 3 layer lineari (11 -> 128 -> 64 -> 2) con attivazione Tanh per confinare i controlli `[-1, 1]`.
 
 ### `detector.py` — Gli occhi dell'agente
 
@@ -185,7 +187,7 @@ main.py
   │
   ├── train_agent()
   │     ├── GridWorldEnv.reset()
-  │     ├── loop 30000 episodi:
+  │     ├── loop 500 episodi:
   │     │     ├── QLearningAgent.choose_action()
   │     │     ├── GridWorldEnv.step()
   │     │     └── QLearningAgent.learn()
