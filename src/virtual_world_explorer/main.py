@@ -165,7 +165,7 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                     msg = f"Obiettivo raggiunto in {episode_step_count} passi!" if done else f"Limite passi raggiunto ({max_demo_steps})."
                     print(f"{msg} Reset della scena.")
                     
-                    if done and max_episodes is not None:
+                    if max_episodes is not None:
                         max_episodes -= 1
                         if max_episodes <= 0:
                             break

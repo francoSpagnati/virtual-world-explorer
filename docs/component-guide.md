@@ -153,7 +153,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 |---|---|
 | `Detection` | Dataclass: `label`, `dx`, `dy`, `visible` |
 | `SemanticDetector` | Sensore semantico |
-| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 3), restituisce direzione normalizzata e `visible=True`. Altrimenti `visible=False`, direzione zero |
+| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 5.0), restituisce direzione normalizzata e `visible=True`. Altrimenti `visible=False`, direzione zero |
 
 **Cosa vede l'agente:** non l'immagine 3D, ma una direzione astratta. Il 3D è solo per l'occhio umano.
 
