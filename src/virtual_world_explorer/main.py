@@ -208,10 +208,16 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
     # Ottieni l'azione raccomandata dalla rete neurale politica
     action = agent.choose_action(state)
     
-    # Se l'agente non vede il target (state[2] == 0) e si muoveva già prima, manteniamo un po' di inerzia
-    if state[2] == 0.0 and last_action is not None:
-        # Fonde l'azione corrente con l'azione precedente al 70% per dare stabilità rettilinea
-        action = 0.3 * action + 0.7 * last_action
+    # Se l'agente non vede il target (state[2] == 0), forza l'esplorazione "Roomba-style":
+    # va dritto alla massima velocità senza curvare, scansionando la mappa.
+    if state[2] == 0.0:
+        action[0] = 1.0   # Massima velocità in avanti
+        action[1] = 0.0   # Nessuna sterzata
+        
+        # Se stava già sterzando per evitare un ostacolo, diamogli un po' di inerzia
+        # per completare la curva ed evitare di bloccarsi contro i muri.
+        if last_action is not None and abs(last_action[1]) > 0.5:
+             action[1] = last_action[1] * 0.8
         
     # Semplice controllo predittivo: se l'azione lineare porta a una collisione imminente rilevata dal radar
     # costringiamo l'agente a ruotare su se stesso (velocità lineare zero, velocità angolare attiva)
