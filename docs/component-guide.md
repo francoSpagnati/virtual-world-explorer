@@ -7,8 +7,8 @@ come si incastrano tra loro, e le ultime evoluzioni tecniche introdotte (il pass
 
 ## Che cosa fa questo progetto?
 
-Immagina un **robottino** (l'agente) che si muove su una **scacchiera 7×7**.
-Sulla scacchiera ci sono tre oggetti tridimensionali o testurizzati: una **sedia** (il bersaglio da raggiungere),
+Immagina un **robottino** (l'agente) che si muove su uno **spazio continuo**.
+Sullo spazio ci sono tre oggetti tridimensionali o testurizzati: una **sedia** (il bersaglio da raggiungere),
 un **tavolo** e una **lampada** (distrattori / ostacoli).
 
 Il robottino all'inizio non sa dove sia la sedia. Deve **imparare da solo**,
@@ -29,8 +29,8 @@ virtual-world-explorer/
 │   ├── main.py              — Entry point, training loop, demo loop
 │   ├── render.py            — Renderer 3D OpenGL (prospettico, modelli 3D, cubo agente, HUD, luci)
 │   ├── model3d.py           — Caricamento OBJ via trimesh + rendering OpenGL immediate mode
-│   ├── env.py               — Ambiente GridWorld (griglia 7×7, oggetti scena, step/reset)
-│   ├── agent.py             — Agente Q-learning tabellare
+│   ├── env.py               — Ambiente GridWorld (spazio continuo, oggetti scena, step/reset)
+│   ├── agent.py             — Agente Continuous Policy Network (v, w)
 │   ├── detector.py          — Sensore semantico base (griglia)
 │   └── owl_vision.py        — Integrazione visiva con OWL-ViT (Zero-Shot Object Detection)
 ├── assets/
@@ -63,16 +63,16 @@ virtual-world-explorer/
 
 | Funzione | Cosa fa |
 |---|---|
-| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue l'addestramento DQN. Restituisce ambiente e agente. |
+| `train_agent()` | Crea `GridWorldEnv` + `QLearningAgent`, esegue l'addestramento. Restituisce ambiente e agente. |
 | `run_demo()` | Apre finestra GLFW/OpenGL, imposta epsilon=0 (greedy), loop di visualizzazione. Termina dopo un numero preimpostato di episodi (`max_episodes`). |
 | `_update_owl_vision_state()` | (Nuova) Gestisce l'estrazione e caching dei risultati di OWL-ViT per mantenere `run_demo` leggibile. |
-| `owl_worker()` / Caching | L'inferenza usa una cache (`episode_owl_cache`). Ora riceve **tutte e 4 le inquadrature** (scansione a 360°) ed effettua un'inferenza batched per trovare istantaneamente la direzione globale della sedia senza dovercisi girare verso. |
+| `owl_worker()` / Caching | L'inferenza usa una cache (`episode_owl_cache`). Ora riceve **tutte e 8 le inquadrature** (scansione a 360°) ed effettua un'inferenza batched per trovare istantaneamente la direzione globale della sedia senza dovercisi girare verso. |
 | `_preview_position()` | Simula dove finirebbe l'agente con una data azione (per controllare collisioni prima di eseguire). |
-| `_choose_action_without_loop()` | Azione greedy dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e penalità per mosse cicliche. |
+| `_choose_action_without_loop()` | Azione dinamica con *Momentum* in esplorazione cieca (tende ad andare dritto per scansionare velocemente) e prevenzione delle collisioni sterzando bruscamente. |
 
 ### `render.py` — Il cuore del 3D
 
-**Passaggio 2D → 3D sta tutto qui.** Gli altri moduli (env, agent, detector) sono rimasti identici.
+**Passaggio 2D → 3D sta tutto qui.** Gli altri moduli (env, agent, detector) sono rimasti identici o evoluti a continuo.
 
 | Componente | 2D (prima) | 3D (ora) |
 |---|---|---|
@@ -99,7 +99,7 @@ virtual-world-explorer/
 | `_setup_camera()` | Imposta la telecamera in due modalità. **Utente**: usa un offset preciso (`-10.5` su Z, poi ruota di `-55°`, poi trasla di `-3.5` su X/Y) per centrare perfettamente la scacchiera sullo schermo. **Egocentrica**: usa le coordinate esatte `float` dell'agente. |
 | `_draw_hud_overlay()` | Passa a proiezione ortografica, disabilita luci, pannello info (label, coordinate, visibilità). |
 | `_draw_text()` / `_draw_glyph()` | Font bitmap con glifo 7×5 pixel in `glRectf`. |
-| `capture_frame()` | Renderizza in back-buffer la visuale *egocentrica ortografica* dell'AI e restituisce array NumPy RGB |
+| `capture_frame()` | Renderizza in back-buffer la visuale *egocentrica ortografica* dell'AI ruotando di 45 gradi (8 canali) e restituisce array NumPy RGB |
 
 ### `model3d.py` — Rendering 3D con trimesh
 
@@ -122,17 +122,16 @@ La libreria `trimesh` gestisce automaticamente il caricamento di texture, colori
 | Classe / Funzione | Cosa fa |
 |---|---|
 | `SceneObject` | Dataclass: `label` (str), `x`, `y`, `color` |
-| `GridWorldEnv` | Ambiente RL |
-| `reset()` | Posiziona agente + sedia/tavolo/lampada in punti casuali non sovrapposti. Restituisce observation (9 tuple) |
-| `step(action)` | Applica movimento (SU/GIÙ/SX/DX). Se distrattore → reward -1, fermo. Se sedia → reward +1, done=True. Altrimenti passo pena + bonus avvicinamento |
-| `_observation()` | Costruisce tupla 9 elementi da posizione agente + `SemanticDetector.detect()` |
-| `_sample_positions(n)` | Sceglie `n` posizioni casuali non sovrapposte sulla griglia |
-| `_manhattan_distance()` | Distanza L1 (euristica) |
+| `GridWorldEnv` | Ambiente RL (continuo) |
+| `reset()` | Posiziona agente + sedia/tavolo/lampada in punti casuali non sovrapposti. Restituisce observation (11 tuple) |
+| `step(action)` | Applica movimento continuo (v, w). Se collisione → reward -2.5, fermo. Se sedia → reward +150, done=True. Altrimenti penalità distanza progressiva |
+| `_get_obs()` | Costruisce tupla 11 elementi da posizione agente + radar 8 direzioni e `SemanticDetector.detect()` |
+| `_sample_continuous_positions(n)` | Sceglie `n` posizioni continue casuali non sovrapposte sull'area |
 
-**Observation** (7 valori):
+**Observation** (11 valori):
 ```
 (dx_sedia, dy_sedia, visible_flag,
- pericolo_su, pericolo_giù, pericolo_sinistra, pericolo_destra)
+ danger_0, danger_45, danger_90, danger_135, danger_180, danger_225, danger_270, danger_315)
 ```
 Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza traslazionale e abbattere radicalmente lo spazio degli stati.
 
@@ -140,11 +139,11 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 
 | Metodo | Cosa fa |
 |---|---|
-| `choose_action(state)` | ε-greedy: sceglie azione casuale con prob ε, altrimenti migliore dalla rete neurale |
-| `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation |
-| `decay_exploration(minimum=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
+| `choose_action(state)` | Esplorazione con rumore gaussiano: sceglie array di controllo casuale tra -1 e 1 con prob ε, altrimenti dalla rete neurale |
+| `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation sulle azioni continue |
+| `decay_exploration(minimum=0.01, factor=0.999)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** lr=0.001 (Adam), γ=0.9, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 64 -> 32 -> 4) con attivazione ReLU.
+**Iperparametri:** lr=0.0005 (Adam), γ=0.95, ε iniziale=1.0. Rete composta da 3 layer lineari (11 -> 128 -> 64 -> 2) con attivazione Tanh sull'output per bounding.
 
 ### `detector.py` — Gli occhi dell'agente
 
@@ -152,7 +151,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 |---|---|
 | `Detection` | Dataclass: `label`, `dx`, `dy`, `visible` |
 | `SemanticDetector` | Sensore semantico |
-| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 3), restituisce direzione normalizzata (dx ∈ {-1,0,1}, dy ∈ {-1,0,1}) e `visible=True`. Altrimenti `visible=False`, direzione zero |
+| `detect(objects, agent_position, target_label)` | Se target entro `vision_radius` (default 3), restituisce direzione normalizzata e `visible=True`. Altrimenti `visible=False`, direzione zero |
 
 **Cosa vede l'agente:** non l'immagine 3D, ma una direzione astratta. Il 3D è solo per l'occhio umano.
 
@@ -161,7 +160,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | Classe / Metodo | Cosa fa |
 |---|---|
 | `OwlVisionDetector` | Carica il modello pre-addestrato `google/owlvit-base-patch32` da HuggingFace, sfruttando automaticamente accelerazione hardware GPU (CUDA/MPS). |
-| `detect_target_multiview(images, target_names)` | Effettua scansione a 360°. Sfrutta i target secondari e una threshold di `0.10` per annullare i falsi positivi e restituisce coordinate globali `dx`, `dy` (successivamente normalizzate in `main.py`). |
+| `detect_target_multiview(images, target_names)` | Effettua scansione a 360° su 8 canali. Sfrutta i target secondari e una threshold di `0.10` per annullare i falsi positivi e restituisce coordinate globali `dx`, `dy`. |
 
 **Nota Architetturale Sulla Latenza:** L'integrazione è **sincrona** rispetto al movimento, ma l'impatto prestazionale è abbattuto grazie alla **cache posizionale**. Dal momento che la scena è statica per l'intero episodio, l'inferenza (pesante ma ottimizzata dal *batching*) viene lanciata al massimo una sola volta per ogni coordinata (x, y) calpestata fornendo una percezione perfetta a 360°. Tornare su celle note costa zero, rendendo fluidissime le manovre di momentum esplorativo.
 
@@ -171,10 +170,10 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 
 Con l'integrazione di OWL-ViT, il progetto ha superato la limitazione di un "tunnel visivo" frontale. La pipeline visiva funziona ora con i seguenti step:
 
-1. **Acquisizione a 360°:** `render.py` (`capture_frame()`) posiziona temporaneamente una telecamera 3D (con 90° di Field of View) al centro dell'agente e genera 4 inquadrature indipendenti girando su se stessa (NORD, SUD, OVEST, EST).
-2. **Batched Inference:** Piuttosto che eseguire 4 deduzioni sequenziali (il che affosserebbe il framerate), `main.py` invia l'intero array di 4 immagini ad `owl_vision.py`.
+1. **Acquisizione a 360°:** `render.py` (`capture_frame()`) posiziona temporaneamente una telecamera 3D (con 90° di Field of View) al centro dell'agente e genera 8 inquadrature indipendenti girando su se stessa a passi di 45 gradi (N, NE, E, SE, S, SO, O, NO).
+2. **Batched Inference:** Piuttosto che eseguire 8 deduzioni sequenziali, `main.py` invia l'intero batch di 8 immagini ad `owl_vision.py`.
 3. **Prompt Negativi (Filtro Antidistrattori):** OWL-ViT viene interrogato simultaneamente per cercare `["chair", "table", "lamp"]`. Il modello assegna i vari "bounding box" all'etichetta più affine. Noi accettiamo esclusivamente i box con *label 0* (la sedia), riducendo praticamente a zero i falsi positivi (prima il modello scambiava il tavolo per una sedia se non gli veniva esplicitamente fornito "tavolo" come alternativa logica).
-4. **Mappatura Globale:** Una volta individuata la sedia nella telecamera con il punteggio migliore, la posizione 2D sullo schermo (destra/sinistra) viene ruotata in base all'indice della telecamera (0=N, 1=S, 2=O, 3=E) fornendo all'istante le esatte coordinate *globali* `dx` e `dy` della griglia, esattamente come se fosse un radar.
+4. **Mappatura Globale:** Una volta individuata la sedia nella telecamera con il punteggio migliore, la posizione 2D sullo schermo viene convertita in radianti in base all'indice della telecamera e all'offset orizzontale. Fornendo all'istante l'angolo globale continuo e convertendolo poi nei vettori normalizzati `dx` e `dy` geometrici.
 5. **Caching Posizionale:** Per evitare di ripetere questo processo ogni volta, l'osservazione globale `(dx, dy, visible)` viene salvata nella `episode_owl_cache` legata alla precisa coordinata `(x, y)` dell'agente per tutta la durata dell'episodio. Tornare su una cella già visitata costa 0 millisecondi di elaborazione.
 
 ---
@@ -186,7 +185,7 @@ main.py
   │
   ├── train_agent()
   │     ├── GridWorldEnv.reset()
-  │     ├── loop 5000 episodi:
+  │     ├── loop 30000 episodi:
   │     │     ├── QLearningAgent.choose_action()
   │     │     ├── GridWorldEnv.step()
   │     │     └── QLearningAgent.learn()
@@ -221,9 +220,9 @@ main.py
          ▼            ▼               ▼
    ┌──────────┐ ┌──────────┐ ┌──────────────────────┐
    │ agent.py │ │ env.py   │ │   render.py          │
-   │ DQN (NN) │ │ float gr │ │   OpenGL 3D          │
-   │ ε-greedy │ │ reward   │ │   prospettico + luci │
-   │ α/γ/ε    │ │ step()   │ │   Model3D.render()   │
+   │ Cont. NN │ │ float gr │ │   OpenGL 3D          │
+   │ gauss noise│ │ reward   │ │   prospettico + luci │
+   │ α/γ/ε    │ │ step(v,w)│ │   Model3D.render()   │
    └──────────┘ └────┬─────┘ │   cubo agente + HUD  │
                      │       └────────┬─────────────┘
                      ▼                │
