@@ -124,7 +124,7 @@ La libreria `trimesh` gestisce automaticamente il caricamento di texture, colori
 | `SceneObject` | Dataclass: `label` (str), `x`, `y`, `color` |
 | `GridWorldEnv` | Ambiente RL |
 | `reset()` | Posiziona agente + sedia/tavolo/lampada in punti casuali non sovrapposti. Restituisce observation (9 tuple) |
-| `step(action)` | Applica movimento (SU/GIÙ/SX/DX). Se distrattore → reward -1, fermo. Se sedia → reward +1, done=True. Altrimenti passo pena + bonus avvicinamento |
+| `step(action)` | Applica movimento (AVANTI/INDIETRO/RUOTA_SX/RUOTA_DX). Se distrattore → reward -1, fermo. Se sedia → reward +1, done=True. Altrimenti passo pena + bonus avvicinamento |
 | `_observation()` | Costruisce tupla 9 elementi da posizione agente + `SemanticDetector.detect()` |
 | `_sample_positions(n)` | Sceglie `n` posizioni casuali non sovrapposte sulla griglia |
 | `_manhattan_distance()` | Distanza L1 (euristica) |
@@ -132,7 +132,7 @@ La libreria `trimesh` gestisce automaticamente il caricamento di texture, colori
 **Observation** (7 valori):
 ```
 (dx_sedia, dy_sedia, visible_flag,
- pericolo_su, pericolo_giù, pericolo_sinistra, pericolo_destra)
+ pericolo_avanti, pericolo_indietro, pericolo_sinistra, pericolo_destra)
 ```
 Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza traslazionale e abbattere radicalmente lo spazio degli stati.
 
@@ -144,7 +144,7 @@ Le coordinate assolute dell'agente sono state omesse per garantire l'invarianza 
 | `learn(state, action, reward, next_state, done)` | Ottimizza la loss MSE tra il Q-value corrente e il target di Bellman usando backpropagation |
 | `decay_exploration(minimum=0.05, factor=0.997)` | Annealing di ε — esplora tanto all'inizio, poi sfrutta |
 
-**Iperparametri:** lr=0.001 (Adam), γ=0.9, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 64 -> 32 -> 4) con attivazione ReLU.
+**Iperparametri:** lr=0.0005 (Adam), γ=0.95, ε iniziale=1.0. Rete composta da 3 layer lineari (7 -> 128 -> 64 -> 4) con attivazione ReLU.
 
 ### `detector.py` — Gli occhi dell'agente
 
@@ -186,7 +186,7 @@ main.py
   │
   ├── train_agent()
   │     ├── GridWorldEnv.reset()
-  │     ├── loop 5000 episodi:
+  │     ├── loop 3500 episodi:
   │     │     ├── QLearningAgent.choose_action()
   │     │     ├── GridWorldEnv.step()
   │     │     └── QLearningAgent.learn()
