@@ -131,8 +131,11 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                         dx, dy = owl_result["dx"], owl_result["dy"]
                         length = math.hypot(dx, dy)
                         if length > 0:
-                            current_state[0] = float(dx) / length
-                            current_state[1] = float(dy) / length
+                            # OWL-ViT restituisce la direzione globale; la convertiamo relativa all'agente
+                            target_global_angle = math.atan2(dy, dx)
+                            relative_angle = target_global_angle - env.agent_heading
+                            current_state[0] = math.cos(relative_angle)
+                            current_state[1] = math.sin(relative_angle)
                         else:
                             current_state[0] = 0.0
                             current_state[1] = 0.0
@@ -223,9 +226,11 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
     # costringiamo l'agente a ruotare su se stesso (velocità lineare zero, velocità angolare attiva)
     v_input, w_input = action[0], action[1]
     linear_vel = max(0.0, ((v_input + 1.0) / 2.0) * env.max_linear_velocity)
+    angular_vel = w_input * env.max_angular_velocity
+    future_heading = env.agent_heading + angular_vel
     
-    next_x = env.agent_x + linear_vel * math.cos(env.agent_heading)
-    next_y = env.agent_y + linear_vel * math.sin(env.agent_heading)
+    next_x = env.agent_x + linear_vel * math.cos(future_heading)
+    next_y = env.agent_y + linear_vel * math.sin(future_heading)
     
     if env._check_collision_at(next_x, next_y):
         # Ostacolo rilevato! Sterza bruscamente sul posto per evitare il blocco continuo

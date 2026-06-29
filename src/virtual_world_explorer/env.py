@@ -121,8 +121,10 @@ class GridWorldEnv:
             # Calcolo continuo verso il target
             dist = math.hypot(target.x - self.agent_x, target.y - self.agent_y)
             if dist > 0:
-                dx = (target.x - self.agent_x) / dist
-                dy = (target.y - self.agent_y) / dist
+                global_target_angle = math.atan2(target.y - self.agent_y, target.x - self.agent_x)
+                relative_angle = global_target_angle - self.agent_heading
+                dx = math.cos(relative_angle)
+                dy = math.sin(relative_angle)
 
         # Radar di prossimità a 8 canali per la navigazione continua omnidirezionale
         danger_signals = []
