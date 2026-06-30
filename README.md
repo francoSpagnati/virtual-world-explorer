@@ -1,32 +1,37 @@
-# Virtual World Explorer
+# Semantic Room Explorer - continuous_env_8d
 
-Minimal GFX-only prototype for a reinforcement learning agent that navigates a 3D world.
+expands discrete navigation to 8 directions within the continuous environment to approximate continuous kinematics. Coupled with an 8-camera batched OWL-ViT setup, this serves as the final production architecture.
 
-## What it does
+## Run Guide
 
-- Renders a 7×7 grid with 3D models (OBJ) using raw OpenGL immediate mode — no high-level frameworks.
-- Parses OBJ + MTL files manually (Chair with texture, Lamp and Table with vertex colors).
-- Trains a tabular Q-learning agent to reach a target object (chair) while avoiding distractors (table, lamp).
-- Uses a semantic detector interface to expose the target label to the policy.
-- Lighting with GL_LIGHT0, smooth shading, depth testing.
+### Requirements
+Ensure you have Python installed. You can install the required dependencies using:
+```bash
+pip install -r requirements.txt
+```
+The dependencies include PyOpenGL, glfw, Pillow, numpy, trimesh, torch, and transformers.
 
-## Run
+### How to Run
+Run the application as a module from the root of the repository:
+```bash
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+This will start the training loop, and subsequently open a 3D OpenGL window showing the agent exploring the environment.
 
-1. Install dependencies from `requirements.txt`.
-2. Extract OBJ files from assets/Chair.zip, assets/Lamp.zip, assets/Table.zip into `assets/models/`.
-3. Run `PYTHONPATH=src python -m virtual_world_explorer.main`.
+## Component Guide (Synthesized)
 
-The code is intentionally small and split into a few focused modules.
+The project simulates an agent (a 3D robot) moving in a continuous environment to find a target object (a chair) while avoiding distractors (a table and a lamp). The agent uses Deep Reinforcement Learning (DDPG with continuous controls `v` and `w`) to learn navigation, guided by a sophisticated 360° visual perception pipeline.
 
-## How to verify it works
+### Core Modules
+* **`main.py`**: The entry point. Orchestrates the training phase (`train_agent`) and the visual demo loop (`run_demo`). It handles the Batched OWL-ViT inference in a background thread and features a positional cache to minimize inference latency during exploration.
+* **`render.py`**: The core of the 3D OpenGL engine. Implements a dual-camera system (an egocentric view for the AI and a 55-degree tilted perspective view for the user). Features depth testing, transparency, material support, and dynamic scaling for 3D models.
+* **`model3d.py`**: A bridge between the `trimesh` library and OpenGL immediate mode. It loads OBJ models with MTL materials and PNG textures, adjusts the coordinate system from Y-up to Z-up, and manages rendering.
+* **`env.py`**: Defines the continuous RL environment (`GridWorldEnv`). Handles logic for collisions, rewards, and constructs the 11-dimensional observation state representing radar and semantic signals.
+* **`agent.py`**: Implements the Actor-Critic DDPG network with Gaussian noise exploration. Optimizes policies based on continuous movement.
+* **`detector.py`**: A semantic sensor that provides normalized directional vectors to the target, abstracting the raw visual data.
+* **`owl_vision.py`**: Integrates `google/owlvit-base-patch32` to perform Zero-Shot Object Detection. Uses an 8-camera 360° setup that scans all directions simultaneously in a batch, drastically improving visual reasoning and target acquisition.
 
-- Training prints reward + epsilon every 50 episodes (5000 total).
-- A GLFW/OpenGL window opens showing a 3D perspective grid with:
-  - White agent cube
-  - 3D chair model (textured) — target
-  - 3D lamp model (colored) — distractor
-  - 3D table model (colored) — distractor
-- The agent moves toward the chair after training.
-- Terminal prints "Target reached, resetting scene." on each success.
-
-If the window does not open, the usual causes are missing OpenGL/GLFW system packages or running in an environment without a display server.
+### Architecture Highlights
+1. **360° Batched Inference**: The agent captures 8 egocentric frames simultaneously at 45-degree intervals. The frames are processed in one batch by the OWL-ViT model.
+2. **Positional Caching**: Once the model runs inference for a specific `(x, y)` coordinate, the result is cached. Returning to a known coordinate costs zero inference time, allowing smooth momentum-based movement.
+3. **Decoupled Engine**: The core RL logic operates independently from the 3D rendering engine. The 3D engine visualizes the training but does not bottleneck the RL loop.
