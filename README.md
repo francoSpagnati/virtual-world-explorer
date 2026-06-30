@@ -1,32 +1,29 @@
-# Virtual World Explorer
+# Semantic Room Explorer - 3d_settings
 
-Minimal GFX-only prototype for a reinforcement learning agent that navigates a 3D world.
+migrates the visualization to a perspective 3D space using glFrustum, depth testing and hardware lighting. It renders the agent as a 3D cube and objects as meshes without altering the underlying Reinforcement Learning logic.
 
-## What it does
+## Run Guide
 
-- Renders a 7×7 grid with 3D models (OBJ) using raw OpenGL immediate mode — no high-level frameworks.
-- Parses OBJ + MTL files manually (Chair with texture, Lamp and Table with vertex colors).
-- Trains a tabular Q-learning agent to reach a target object (chair) while avoiding distractors (table, lamp).
-- Uses a semantic detector interface to expose the target label to the policy.
-- Lighting with GL_LIGHT0, smooth shading, depth testing.
+To run this project, make sure you have installed the required dependencies:
 
-## Run
+```bash
+pip install -r requirements.txt
+```
 
-1. Install dependencies from `requirements.txt`.
-2. Extract OBJ files from assets/Chair.zip, assets/Lamp.zip, assets/Table.zip into `assets/models/`.
-3. Run `PYTHONPATH=src python -m virtual_world_explorer.main`.
+You can then run the training and demonstration by executing the main script:
 
-The code is intentionally small and split into a few focused modules.
+```bash
+python src/virtual_world_explorer/main.py
+```
 
-## How to verify it works
+## Component Guide
 
-- Training prints reward + epsilon every 50 episodes (5000 total).
-- A GLFW/OpenGL window opens showing a 3D perspective grid with:
-  - White agent cube
-  - 3D chair model (textured) — target
-  - 3D lamp model (colored) — distractor
-  - 3D table model (colored) — distractor
-- The agent moves toward the chair after training.
-- Terminal prints "Target reached, resetting scene." on each success.
+This branch incorporates a full 3D rendering pipeline and advanced vision logic on top of the original Reinforcement Learning baseline. Here is a synthesized summary of the core components:
 
-If the window does not open, the usual causes are missing OpenGL/GLFW system packages or running in an environment without a display server.
+*   **`main.py`**: The central entry point orchestrating both the training loop (`train_agent`) and the visual demo loop (`run_demo`). It spawns a background thread for OWL-ViT inference to keep performance high and introduces a continuous momentum logic to avoid stalling on collisions.
+*   **`render.py`**: The core of the 2D to 3D transition. It replaces orthographic top-down views with a `glFrustum` perspective camera, implements hardware lighting (`GL_LIGHT0`), depth testing (`GL_DEPTH_TEST`), and alpha blending. It coordinates the drawing of the 3D grid, the agent's cube/mesh, and other objects.
+*   **`model3d.py`**: A specialized loader that delegates parsing of `.obj` models, `.mtl` materials, and textures to `trimesh`, but manages the actual rendering directly in OpenGL immediate mode. It handles Y-up to Z-up conversion and bounds scaling automatically.
+*   **`env.py`**: The continuous GridWorld environment. It models coordinates continuously (no longer discrete grids), handles collisions, and evaluates continuous actions `(v, w)` from the agent, dispensing rewards and calculating the 11-dimensional observation state.
+*   **`agent.py`**: Implements a Continuous Policy Network (actor-critic architecture) using a Replay Buffer. It outputs continuous control parameters (linear and angular velocities) bound by `tanh` and explores using gaussian noise.
+*   **`detector.py`**: A baseline semantic sensor that checks if a target object is within the agent's visible radius, returning its angle for the observation vector.
+*   **`owl_vision.py`**: Replaces the baseline sensor with a zero-shot `google/owlvit-base-patch32` object detector. It performs a batched inference over 8 simultaneous perspectives (360-degree vision) to find the "chair" among distractors like tables and lamps, heavily optimized using a positional cache.
