@@ -5,17 +5,17 @@ This branch implements a dual-camera pipeline, with a stable tilted perspective 
 ## Run Guide
 
 ### Requirements
-Ensure you have the necessary dependencies installed. You can install them via pip:
-
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
 ```
 
-This will install packages such as `PyOpenGL`, `glfw`, `Pillow`, `numpy`, `trimesh`, `torch`, and `transformers`.
-
 ### How to Run
-To run the training and start the simulation demo, execute the main entry point:
-
+To train the agent and run the demo loop, use the following command from the root of the repository:
+```bash
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+Alternatively, you can run the entry script directly:
 ```bash
 python src/virtual_world_explorer/main.py
 ```
