@@ -1,6 +1,6 @@
 # Semantic Room Explorer - main
 
-establishes the 2D grid foundation using PyOpenGL and GLFW. It introduces a tabular Q-learning agent navigating a 7x7 arena via simulated relative semantic sensors and foundational anti-loop reward mechanics.
+This branch establishes the 2D grid foundation using PyOpenGL and GLFW. It introduces a tabular Q-learning agent navigating a 7x7 arena via simulated relative semantic sensors and foundational anti-loop reward mechanics.
 
 ## Run Guide
 
@@ -31,5 +31,3 @@ This project is modularly structured into the following core components:
 - **`agent.py`**: The RL agent utilizing a continuous policy. Contains Actor and Critic neural networks along with a Replay Buffer to learn continuous velocity and angular controls (`v, w`).
 - **`detector.py`**: The foundational semantic sensor logic, determining the relative target direction.
 - **`owl_vision.py`**: The zero-shot visual detection pipeline. Utilizes Google's OWL-ViT to perform batched 360° object detection, allowing the agent to locate the target purely from rendered camera views.
-
-For deeper architectural and latency optimization details, please refer to `docs/component-guide.md`.
