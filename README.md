@@ -1,32 +1,48 @@
-# Virtual World Explorer
+# Semantic Room Explorer - 3d_parametric
 
-Minimal GFX-only prototype for a reinforcement learning agent that navigates a 3D world.
+This branch decouples the system from hardcoded grid constraints by scaling all parameters with respect to an arbitrary grid size. It maintains translation invariance within the 7D relative state space to allow zero-shot policy generalization.
 
-## What it does
+## Run Guide
 
-- Renders a 7×7 grid with 3D models (OBJ) using raw OpenGL immediate mode — no high-level frameworks.
-- Parses OBJ + MTL files manually (Chair with texture, Lamp and Table with vertex colors).
-- Trains a tabular Q-learning agent to reach a target object (chair) while avoiding distractors (table, lamp).
-- Uses a semantic detector interface to expose the target label to the policy.
-- Lighting with GL_LIGHT0, smooth shading, depth testing.
+### Requirements
+Ensure you have the necessary dependencies installed. You can install them via pip:
 
-## Run
+```bash
+pip install -r requirements.txt
+```
 
-1. Install dependencies from `requirements.txt`.
-2. Extract OBJ files from assets/Chair.zip, assets/Lamp.zip, assets/Table.zip into `assets/models/`.
-3. Run `PYTHONPATH=src python -m virtual_world_explorer.main`.
+This will install packages such as `PyOpenGL`, `glfw`, `Pillow`, `numpy`, `trimesh`, `torch`, and `transformers`.
 
-The code is intentionally small and split into a few focused modules.
+### How to Run
+To run the training and start the simulation demo, execute the main entry point:
 
-## How to verify it works
+```bash
+python src/virtual_world_explorer/main.py
+```
 
-- Training prints reward + epsilon every 50 episodes (5000 total).
-- A GLFW/OpenGL window opens showing a 3D perspective grid with:
-  - White agent cube
-  - 3D chair model (textured) — target
-  - 3D lamp model (colored) — distractor
-  - 3D table model (colored) — distractor
-- The agent moves toward the chair after training.
-- Terminal prints "Target reached, resetting scene." on each success.
+## Component Guide (Synthesized)
 
-If the window does not open, the usual causes are missing OpenGL/GLFW system packages or running in an environment without a display server.
+The **Virtual World Explorer 3D** trains an agent (a robot) to navigate a continuous 3D environment to find a target (a chair) while avoiding obstacles (a table and a lamp). It employs Reinforcement Learning (DDPG) alongside a visual perception module (OWL-ViT) for object detection.
+
+### Architecture Overview
+
+- **`src/virtual_world_explorer/main.py`**
+  The entry point of the application. It orchestrates the entire flow: running the training loop (`train_agent`), managing the 3D visual demo (`run_demo`), and handling batched inferences for zero-shot object detection to prevent gameplay lag.
+
+- **`src/virtual_world_explorer/render.py`**
+  The core 3D rendering module. It utilizes PyOpenGL to provide dual camera perspectives (a fixed user view and an egocentric AI view). It handles depth buffering, lighting, and renders 3D models with textures instead of simple 2D shapes.
+
+- **`src/virtual_world_explorer/model3d.py`**
+  Responsible for 3D asset management. It leverages the `trimesh` library to parse OBJ models and MTL materials, scaling them and converting their coordinate systems before rendering them via OpenGL immediate mode.
+
+- **`src/virtual_world_explorer/env.py`**
+  The Reinforcement Learning environment (`GridWorldEnv`). It handles continuous spatial coordinates, object placement, collision detection, and reward calculation. It abstracts the world into an 11-dimensional observation state (ignoring absolute coordinates to maintain translation invariance).
+
+- **`src/virtual_world_explorer/agent.py`**
+  Implements the continuous reinforcement learning agent (DDPG) utilizing an Actor-Critic architecture. It explores the environment using Gaussian noise and learns from a replay buffer.
+
+- **`src/virtual_world_explorer/detector.py`**
+  A semantic sensor that gives the agent directional awareness (abstract orientation) towards the target if it is within a specified vision radius.
+
+- **`src/virtual_world_explorer/owl_vision.py`**
+  Integrates a deep learning zero-shot object detection pipeline (`google/owlvit-base-patch32`). It processes a 360-degree batched scan of the environment from the agent's perspective, mapping objects in the field of view without hardcoded rules, backed by positional caching for performance.
