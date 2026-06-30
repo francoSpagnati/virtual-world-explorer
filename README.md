@@ -1,22 +1,24 @@
 # Semantic Room Explorer - continuous_env_8d
 
-expands discrete navigation to 8 directions within the continuous environment to approximate continuous kinematics. Coupled with an 8-camera batched OWL-ViT setup, this serves as the final production architecture.
+This branch expands discrete navigation to 8 directions within the continuous environment to approximate continuous kinematics. Coupled with an 8-camera batched OWL-ViT setup, this serves as the final production architecture.
 
 ## Run Guide
 
 ### Requirements
-Ensure you have Python installed. You can install the required dependencies using:
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
 ```
-The dependencies include PyOpenGL, glfw, Pillow, numpy, trimesh, torch, and transformers.
 
 ### How to Run
-Run the application as a module from the root of the repository:
+To train the agent and run the demo loop, use the following command from the root of the repository:
 ```bash
 PYTHONPATH=src python -m virtual_world_explorer.main
 ```
-This will start the training loop, and subsequently open a 3D OpenGL window showing the agent exploring the environment.
+Alternatively, you can run the entry script directly:
+```bash
+python src/virtual_world_explorer/main.py
+```
 
 ## Component Guide (Synthesized)
 
