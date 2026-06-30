@@ -1,32 +1,48 @@
-# Virtual World Explorer
+# Semantic Room Explorer - 3d_horizontal_camera
 
-Minimal GFX-only prototype for a reinforcement learning agent that navigates a 3D world.
+This branch implements a dual-camera pipeline, with a stable tilted perspective view for user monitoring and a 4-directional egocentric view for the agent. This restricts visibility to a tight radius to optimize visual object detection.
 
-## What it does
+## Run Guide
 
-- Renders a 7×7 grid with 3D models (OBJ) using raw OpenGL immediate mode — no high-level frameworks.
-- Parses OBJ + MTL files manually (Chair with texture, Lamp and Table with vertex colors).
-- Trains a tabular Q-learning agent to reach a target object (chair) while avoiding distractors (table, lamp).
-- Uses a semantic detector interface to expose the target label to the policy.
-- Lighting with GL_LIGHT0, smooth shading, depth testing.
+### Requirements
+Ensure you have the necessary dependencies installed. You can install them via pip:
 
-## Run
+```bash
+pip install -r requirements.txt
+```
 
-1. Install dependencies from `requirements.txt`.
-2. Extract OBJ files from assets/Chair.zip, assets/Lamp.zip, assets/Table.zip into `assets/models/`.
-3. Run `PYTHONPATH=src python -m virtual_world_explorer.main`.
+This will install packages such as `PyOpenGL`, `glfw`, `Pillow`, `numpy`, `trimesh`, `torch`, and `transformers`.
 
-The code is intentionally small and split into a few focused modules.
+### How to Run
+To run the training and start the simulation demo, execute the main entry point:
 
-## How to verify it works
+```bash
+python src/virtual_world_explorer/main.py
+```
 
-- Training prints reward + epsilon every 50 episodes (5000 total).
-- A GLFW/OpenGL window opens showing a 3D perspective grid with:
-  - White agent cube
-  - 3D chair model (textured) — target
-  - 3D lamp model (colored) — distractor
-  - 3D table model (colored) — distractor
-- The agent moves toward the chair after training.
-- Terminal prints "Target reached, resetting scene." on each success.
+## Component Guide (Synthesized)
 
-If the window does not open, the usual causes are missing OpenGL/GLFW system packages or running in an environment without a display server.
+The **Virtual World Explorer 3D** trains an agent to navigate a 3D environment to find a target while avoiding obstacles. It employs Reinforcement Learning (Q-Learning) alongside a visual perception module (OWL-ViT) for zero-shot object detection.
+
+### Architecture Overview
+
+- **`src/virtual_world_explorer/main.py`**
+  The entry point of the application. It runs the training loop, manages the 3D visual demo, and handles batched inferences for zero-shot object detection.
+
+- **`src/virtual_world_explorer/render.py`**
+  The core 3D rendering module using PyOpenGL. In this branch, it implements a dual-camera pipeline. One is a stable tilted perspective view for the user, and the other is a 4-directional egocentric view for the agent, which optimizes visibility and restricts the view radius for visual object detection.
+
+- **`src/virtual_world_explorer/model3d.py`**
+  Handles 3D asset management. Uses `trimesh` to load OBJ files and their MTL textures into the immediate-mode OpenGL rendering pipeline.
+
+- **`src/virtual_world_explorer/env.py`**
+  The RL environment mapping discrete grid cells to 3D space.
+
+- **`src/virtual_world_explorer/agent.py`**
+  Implements the Q-Learning agent managing discrete 4D actions and building the Q-table.
+
+- **`src/virtual_world_explorer/detector.py`**
+  Simulated semantic sensor for training logic.
+
+- **`src/virtual_world_explorer/owl_vision.py`**
+  Integrates `google/owlvit-base-patch32` for 360-degree batched visual detection from the egocentric cameras.
