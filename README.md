@@ -5,16 +5,20 @@ This branch replaces the tile grid with a continuous coordinate space while keep
 
 ## Run Guide
 
-**Requirements:**
-Install the necessary dependencies using pip:
+### Requirements
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
 ```
 
-**How to run:**
-Run the main script to start the training and visual demo:
+### How to Run
+To train the agent and run the demo loop, use the following command from the root of the repository:
 ```bash
-python -m src.virtual_world_explorer.main
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+Alternatively, you can run the entry script directly:
+```bash
+python src/virtual_world_explorer/main.py
 ```
 
 ## Component Guide Summary
