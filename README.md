@@ -4,17 +4,20 @@ This branch evaluates a continuous unicycle model (v, w) for agent control. The 
 
 ## Run Guide
 
-**Requirements:**
-Install the necessary dependencies using pip:
+### Requirements
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
 ```
-*(Dependencies include PyOpenGL, glfw, Pillow, numpy, trimesh, torch, and transformers).*
 
-**How to run it:**
-To run the project, which trains the DDPG agent and subsequently launches the 3D OpenGL demonstration with the OWL-ViT vision system, execute:
+### How to Run
+To train the agent and run the demo loop, use the following command from the root of the repository:
 ```bash
-python -m src.virtual_world_explorer.main
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+Alternatively, you can run the entry script directly:
+```bash
+python src/virtual_world_explorer/main.py
 ```
 
 ## Component Guide
