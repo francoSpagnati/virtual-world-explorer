@@ -1,25 +1,35 @@
-# Virtual World Explorer
+# Semantic Room Explorer - main
 
-Minimal GFX-only prototype for a reinforcement learning agent that navigates a 2D world.
+establishes the 2D grid foundation using PyOpenGL and GLFW. It introduces a tabular Q-learning agent navigating a 7x7 arena via simulated relative semantic sensors and foundational anti-loop reward mechanics.
 
-## What it does
+## Run Guide
 
-- Renders a small 2D grid with OpenGL.
-- Trains a tiny Q-learning agent to reach a target object.
-- Uses a minimal semantic detector interface to expose the target label to the policy.
+### Requirements
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
+```bash
+pip install -r requirements.txt
+```
 
-## Run
+### How to Run
+To train the agent and run the demo loop, use the following command from the root of the repository:
+```bash
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+Alternatively, you can run the entry script directly:
+```bash
+python src/virtual_world_explorer/main.py
+```
 
-1. Install dependencies from `requirements.txt`.
-2. Run `PYTHONPATH=src python -m virtual_world_explorer.main`.
+## Component Guide
 
-The code is intentionally small and split into a few focused modules.
+This project is modularly structured into the following core components:
 
-## How to verify it works
+- **`main.py`**: The central orchestrator. It executes the RL training (`train_agent`), runs the visual demo (`run_demo`), coordinates background inference for computer vision, and applies movement heuristics to prevent looping.
+- **`render.py`**: The 3D visual frontend. Uses PyOpenGL to render a 3D perspective with lighting, textured OBJ models for the agent and obstacles, and an orthographic HUD. It also captures the 360° visual frames used by the AI.
+- **`model3d.py`**: A dedicated 3D utility module that leverages `trimesh` to load 3D assets (OBJ, MTL) and their textures, mapping them seamlessly into the immediate-mode OpenGL scene.
+- **`env.py`**: The continuous `GridWorldEnv` environment. Manages spatial coordinates, obstacle collision logic, rewards, and assembles the 11-dimensional observation state for the agent.
+- **`agent.py`**: The RL agent utilizing a continuous policy. Contains Actor and Critic neural networks along with a Replay Buffer to learn continuous velocity and angular controls (`v, w`).
+- **`detector.py`**: The foundational semantic sensor logic, determining the relative target direction.
+- **`owl_vision.py`**: The zero-shot visual detection pipeline. Utilizes Google's OWL-ViT to perform batched 360° object detection, allowing the agent to locate the target purely from rendered camera views.
 
-- A GLFW/OpenGL window should open and show a 2D grid.
-- You should see one white agent square, one green target object, and two distractor objects with different colors.
-- The agent should move toward the target after training finishes.
-- In the terminal, you should also see training progress printed every 50 episodes.
-
-If the window does not open, the usual causes are missing OpenGL/GLFW system packages or running in an environment without a display server.
+For deeper architectural and latency optimization details, please refer to `docs/component-guide.md`.
