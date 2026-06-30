@@ -1,17 +1,21 @@
 # Semantic Room Explorer - 3d_settings
 
-migrates the visualization to a perspective 3D space using glFrustum, depth testing and hardware lighting. It renders the agent as a 3D cube and objects as meshes without altering the underlying Reinforcement Learning logic.
+This branch migrates the visualization to a perspective 3D space using glFrustum, depth testing and hardware lighting. It renders the agent as a 3D cube and objects as meshes without altering the underlying Reinforcement Learning logic.
 
 ## Run Guide
 
-To run this project, make sure you have installed the required dependencies:
-
+### Requirements
+Ensure you have Python installed, then install the dependencies from the `requirements.txt` file:
 ```bash
 pip install -r requirements.txt
 ```
 
-You can then run the training and demonstration by executing the main script:
-
+### How to Run
+To train the agent and run the demo loop, use the following command from the root of the repository:
+```bash
+PYTHONPATH=src python -m virtual_world_explorer.main
+```
+Alternatively, you can run the entry script directly:
 ```bash
 python src/virtual_world_explorer/main.py
 ```
