@@ -55,7 +55,6 @@ class Model3D:
         all_vertices = []
         
         for name, geom in geoms:
-            # Trasformiamo le coordinate da Y-up a Z-up
             v = geom.vertices
             v_transformed = np.column_stack((v[:, 0], v[:, 2], v[:, 1]))
             all_vertices.append(v_transformed)
@@ -79,7 +78,6 @@ class Model3D:
                 uvs = geom.visual.uv
                 
             normals = geom.vertex_normals
-            # Transformiamo le normali nello stesso modo delle coordinate
             normals = np.column_stack((normals[:, 0], normals[:, 2], normals[:, 1]))
             
             self.geometries.append({

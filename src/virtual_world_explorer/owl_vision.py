@@ -4,9 +4,7 @@ from transformers import OwlViTProcessor, OwlViTForObjectDetection
 
 class OwlVisionDetector:
     def __init__(self, model_name: str = "google/owlvit-base-patch32"):
-        """
-        Inizializza il modello OWL-ViT per la detection visuale zero-shot.
-        """
+
         self.device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         print(f"[OWL-ViT] Caricamento modello {model_name} su {self.device}...")
         self.processor = OwlViTProcessor.from_pretrained(model_name)
@@ -14,12 +12,7 @@ class OwlVisionDetector:
         print("[OWL-ViT] Modello caricato con successo.")
 
     def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.03) -> tuple[int, int, bool]:
-        """
-        Analizza un batch di immagini (NORD, SUD, OVEST, EST) e cerca il target primario.
-        L'utilizzo di target multipli (es. ["chair", "table", "lamp"]) previene i falsi positivi
-        permettendo al modello di distinguere gli oggetti.
-        Restituisce (global_dx, global_dy, visible).
-        """
+
         text_queries = [f"an object that is a {name}" for name in target_names]
         texts = [text_queries] * len(images)
         
@@ -43,7 +36,6 @@ class OwlVisionDetector:
             labels = res["labels"]
             
             for i, score in enumerate(scores):
-                # Controlliamo solo il target primario (label == 0)
                 if labels[i] == 0 and score.item() > best_score:
                     best_score = score.item()
                     best_box = boxes[i].tolist()
@@ -69,7 +61,6 @@ class OwlVisionDetector:
             
         local_dy = 1
         
-        # Mappatura globale basata sull'indice della telecamera (0=N, 1=S, 2=W, 3=E)
         if best_image_idx == 0:
             global_dx = local_dx
             global_dy = -local_dy
@@ -86,7 +77,7 @@ class OwlVisionDetector:
         return global_dx, global_dy, True
 
 if __name__ == "__main__":
-    # Piccolo script di test
+
     detector = OwlVisionDetector()
     
     test_images = [Image.new('RGB', (720, 720), color = 'white') for _ in range(4)]

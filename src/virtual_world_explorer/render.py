@@ -149,10 +149,7 @@ class OpenGLRenderer:
 
 
     def capture_frame(self) -> list[np.ndarray] | None:
-        """
-        Esegue 4 rendering prospettici 3D dalle coordinate dell'agente 
-        (uno per ogni direzione: 0=Nord, 1=Sud, 2=Ovest, 3=Est) e restituisce una lista di 4 frame.
-        """
+
         if self.window is None:
             return None
 
@@ -160,18 +157,14 @@ class OpenGLRenderer:
         width, height = self.config.window_size, self.config.window_size
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
 
-        # Scansione sulle 4 direzioni orizzontali
         for direction in range(4):
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             
-            # Chiamiamo setup_camera con egocentric=True passando la direzione corrente
             self._setup_camera(egocentric=True, direction=direction)
             
-            # Disegniamo il mondo (Griglia + Oggetti)
             self._draw_grid()
             self._draw_objects()
             
-            # Catturiamo i pixel di questa direzione
             data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
             image_array = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
             image_array = np.flipud(image_array)
@@ -210,10 +203,9 @@ class OpenGLRenderer:
         glLoadIdentity()
         
         near_val = 0.1
-        far_val = 150.0  # Aumentato da 50.0 a 150.0 per evitare il clipping
+        far_val = 150.0  
 
         if egocentric:
-            # La telecamera AI rimane invariata perché scansiona a 360° con FOV fisso ad altezza occhi
             fov = 90.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -222,27 +214,24 @@ class OpenGLRenderer:
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
             
-            # Posizionamento ad altezza occhi dell'agente (az = 0.4 per stare sopra il pavimento)
             ax = self.env.agent_x + 0.5
             ay = self.env.agent_y + 0.5
             az = 0.4
             
-            # Ruotiamo l'inquadratura in base alla direzione di scansione passata da capture_frame
-            if direction == 0:    # NORD (verso -Y)
+            if direction == 0:
                 glRotatef(-90.0, 1.0, 0.0, 0.0)
                 glRotatef(180.0, 0.0, 0.0, 1.0)
-            elif direction == 1:  # SUD (verso +Y)
+            elif direction == 1:
                 glRotatef(-90.0, 1.0, 0.0, 0.0)
-            elif direction == 2:  # OVEST (verso -X)
+            elif direction == 2:
                 glRotatef(-90.0, 1.0, 0.0, 0.0)
                 glRotatef(-90.0, 0.0, 0.0, 1.0)
-            elif direction == 3:  # EST (verso +X)
+            elif direction == 3:
                 glRotatef(-90.0, 1.0, 0.0, 0.0)
                 glRotatef(90.0, 0.0, 0.0, 1.0)
                 
             glTranslatef(-ax, -ay, -az)
         else:
-            # VISTA UTENTE PARAMETRICA
             fov = 45.0
             top = near_val * math.tan(math.radians(fov / 2.0))
             right = top
@@ -251,8 +240,6 @@ class OpenGLRenderer:
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
             
-            # Calcolo dinamico della distanza sull'asse Z per inquadrare perfettamente arene grandi
-            # Usiamo un fattore proporzionale (es. size * 1.6) per assicurarci la copertura visiva
             camera_distance = self.env.size * 1.6
             
             glTranslatef(-self.env.size / 2.0, -self.env.size / 2.0, -camera_distance)

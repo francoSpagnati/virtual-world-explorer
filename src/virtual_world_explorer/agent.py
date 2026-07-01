@@ -14,8 +14,6 @@ class QLearningAgent:
         self.gamma = gamma
         self.epsilon = epsilon
         self.random = random.Random(13)
-        # Inizializziamo a 0.0 invece che 1.0 per evitare che le azioni inesplorate
-        # sembrino migliori di quelle che portano al target.
         self.q_values = defaultdict(lambda: [0.0 for _ in range(self.actions)])
 
     def choose_action(self, state: State) -> int:

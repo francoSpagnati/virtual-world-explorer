@@ -32,20 +32,16 @@ class GridWorldEnv:
         self.objects: list[SceneObject] = []
 
     def reset(self) -> tuple[int, int, int, int, int, int, int]:
-        # Calcoliamo dinamicamente quanti ostacoli inserire per mantenere la densità costante.
+
         num_distractors = max(2, int((self.size ** 2) * 0.12))
-        
-        # Generiamo la lista degli oggetti partendo dalla sedia (target)
         object_specs = [("chair", (0.1, 0.7, 0.2))]
         
-        # Alterniamo tavoli e lampade
         for i in range(num_distractors):
             if i % 2 == 0:
                 object_specs.append(("table", (0.2, 0.4, 0.9)))
             else:
                 object_specs.append(("lamp", (0.9, 0.7, 0.2)))
                 
-        # Campioniamo le posizioni in base a quanti oggetti abbiamo + l'agente
         positions = self._sample_positions(len(object_specs) + 1)
         self.agent_x, self.agent_y = positions[0]
         
@@ -83,7 +79,6 @@ class GridWorldEnv:
             current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
             done = self.agent_x == target.x and self.agent_y == target.y
             
-            # Forte penalità per ogni passo per incoraggiare percorsi brevi
             reward = -0.1 + 0.05 * (previous_distance - current_distance)
             if previous_position == (self.agent_x, self.agent_y):
                 reward -= 0.2
