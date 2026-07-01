@@ -10,11 +10,7 @@ State = tuple[float, ...]
 
 class ContinuousPolicyNetwork(nn.Module):
     def __init__(self, input_dim: int = 11, output_dim: int = 2):
-        """
-        Rete neurale adibita al controllo continuo (Actor).
-        Input_dim = 11 (esteso per il radar a 8 direzioni)
-        Output_dim = 2 (Linear velocity, Angular velocity)
-        """
+
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, 128),
@@ -22,7 +18,7 @@ class ContinuousPolicyNetwork(nn.Module):
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, output_dim),
-            nn.Tanh() # Forza l'output continuo nell'intervallo [-1.0, 1.0]
+            nn.Tanh() 
         )
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -79,23 +75,17 @@ class QLearningAgent:
         self.tau = 0.005
 
     def choose_action(self, state: State) -> np.ndarray:
-        """
-        Sceglie un'azione continua [v, w] applicando un'esplorazione di tipo rumore gaussiano.
-        """
+
         if self.random.random() < self.epsilon:
-            # Esplorazione: genera forze di controllo casuali tra -1 e 1
             return np.array([self.random.uniform(-1.0, 1.0), self.random.uniform(-1.0, 1.0)], dtype=np.float32)
         
-        # Sfruttamento della rete neurale
         with torch.no_grad():
             state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
             action_values = self.policy_net(state_t).squeeze(0).cpu().numpy()
             return action_values
 
     def learn(self, state: State, action: np.ndarray | list[float], reward: float, next_state: State, done: bool) -> None:
-        """
-        Esegue l'aggiornamento dei gradienti usando DDPG (Deep Deterministic Policy Gradient).
-        """
+
         self.memory.push(state, action, reward, next_state, done)
         
         if len(self.memory) < self.batch_size:
@@ -109,7 +99,6 @@ class QLearningAgent:
         next_state_t = torch.FloatTensor(next_states)
         done_t = torch.FloatTensor(dones).unsqueeze(1)
         
-        # Critic update
         with torch.no_grad():
             next_action_t = self.target_policy_net(next_state_t)
             target_q = self.target_critic_net(next_state_t, next_action_t)
@@ -122,14 +111,12 @@ class QLearningAgent:
         critic_loss.backward()
         self.critic_optimizer.step()
         
-        # Actor update
         actor_loss = -self.critic_net(state_t, self.policy_net(state_t)).mean()
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
         
-        # Soft update target networks
         for param, target_param in zip(self.critic_net.parameters(), self.target_critic_net.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
             

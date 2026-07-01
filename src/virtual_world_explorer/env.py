@@ -7,33 +7,30 @@ import numpy
 
 from .detector import SemanticDetector
 
-# Rimosse le vecchie costanti discrete UP, DOWN, LEFT, RIGHT
-
 @dataclass(frozen=True)
 class SceneObject:
     label: str
-    x: float  # Coordinate continue
-    y: float  # Coordinate continue
+    x: float  
+    y: float  
     color: tuple[float, float, float]
-    radius: float = 0.35  # Raggio fisico di ingombro dell'ostacolo
+    radius: float = 0.35  
 
 
 class GridWorldEnv:
     def __init__(self, size: int = 7, seed: int = 7, detector: SemanticDetector | None = None) -> None:
-        self.size = float(size)  # L'arena è uno spazio continuo float
+        self.size = float(size)  
         self.random = random.Random(seed)
         self.detector = detector or SemanticDetector()
         self.target_label = "chair"
         
         self.agent_x = 0.0
         self.agent_y = 0.0
-        self.agent_radius = 0.25  # Raggio fisico dell'agente cubo
-        
-        # Parametri di movimento continuo massimi per singolo step
+        self.agent_radius = 0.25  
+
         self.max_linear_velocity = 0.25 
-        self.max_angular_velocity = math.radians(45.0) # Massimo 45 gradi di rotazione per step
-        self.agent_heading = 0.0 # Angolo di orientamento corrente dell'agente in radianti
-        
+        self.max_angular_velocity = math.radians(45.0)
+        self.agent_heading = 0.0 
+
         self.objects: list[SceneObject] = []
 
     def reset(self) -> tuple[float, ...]:
@@ -46,8 +43,8 @@ class GridWorldEnv:
         positions = self._sample_continuous_positions(len(object_specs) + 1)
         
         self.agent_x, self.agent_y = positions[0]
-        self.agent_heading = self.random.uniform(0, 2 * math.pi) # Orientamento iniziale casuale
-        
+        self.agent_heading = self.random.uniform(0, 2 * math.pi) 
+
         self.objects = [
             SceneObject(label=spec[0], x=pos[0], y=pos[1], color=spec[1])
             for spec, pos in zip(object_specs, positions[1:])
@@ -55,26 +52,17 @@ class GridWorldEnv:
         return self._get_obs()
 
     def step(self, action: numpy.ndarray | list[float]) -> tuple[tuple[float, ...], float, bool, dict]:
-        """
-        Esegue un passo nello spazio di controllo continuo.
-        action: [v, w] dove:
-          - v: velocità lineare scalata tra [-1, 1] -> mappata su [0, max_linear_velocity]
-          - w: velocità angolare scalata tra [-1, 1] -> mappata su [-max_angular_velocity, max_angular_velocity]
-        """
+
         v_input, w_input = action[0], action[1]
         
-        # Denormalizzazione degli input continui della rete neurale
-        linear_vel = max(0.0, ((v_input + 1.0) / 2.0) * self.max_linear_velocity) # solo movimento in avanti
+        linear_vel = max(0.0, ((v_input + 1.0) / 2.0) * self.max_linear_velocity) 
         angular_vel = w_input * self.max_angular_velocity
         
-        # Aggiorna l'orientamento dell'agente
         self.agent_heading = (self.heading + angular_vel) % (2 * math.pi)
         
-        # Calcola la traiettoria dello spostamento continuo nello spazio cartesiano
         next_x = self.agent_x + linear_vel * math.cos(self.agent_heading)
         next_y = self.agent_y + linear_vel * math.sin(self.agent_heading)
         
-        # Controllo delle collisioni continue prima di convalidare la posizione
         if not self._check_collision_at(next_x, next_y):
             self.agent_x = next_x
             self.agent_y = next_y
@@ -85,14 +73,12 @@ class GridWorldEnv:
         target = self._target_object()
         distance = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
         
-        # Calcolo del sistema di Reward continuo
         done = distance < (self.agent_radius + target.radius)
         if done:
             reward = 150.0
         elif collision:
             reward = -2.5
         else:
-            # Reward shaping basata sulla vicinanza progressiva
             reward = -0.1 - (distance * 0.1)
 
         return self._get_obs(), reward, done, {}
@@ -102,23 +88,14 @@ class GridWorldEnv:
         return self.agent_heading
 
     def _get_obs(self) -> tuple[float, ...]:
-        """
-        Restituisce lo stato osservato adattandosi al SemanticDetector originale.
-        Vettore esteso a 11 elementi per supportare la granularità a 8 telecamere:
-        [dx, dy, visible, danger_0, danger_45, danger_90, danger_135, danger_180, danger_225, danger_270, danger_315]
-        """
+
         target = self._target_object()
-        # Otteniamo il risultato dal detector originale
         detector_result = self.detector.detect(self.objects, (self.agent_x, self.agent_y), self.target_label)
         
-        # Estraiamo i valori in base alla struttura nativa del tuo SemanticDetector
         visible = float(detector_result.visible)
         
-        # Nel detector originale dx e dy sono attributi diretti dell'oggetto o ricavabili.
-        # Per massima sicurezza e compatibilità, calcoliamo direttamente il vettore direzionale geometrico continuo:
         dx, dy = 0.0, 0.0
         if detector_result.visible:
-            # Calcolo continuo verso il target
             dist = math.hypot(target.x - self.agent_x, target.y - self.agent_y)
             if dist > 0:
                 global_target_angle = math.atan2(target.y - self.agent_y, target.x - self.agent_x)
@@ -126,7 +103,6 @@ class GridWorldEnv:
                 dx = math.cos(relative_angle)
                 dy = math.sin(relative_angle)
 
-        # Radar di prossimità a 8 canali per la navigazione continua omnidirezionale
         danger_signals = []
         for i in range(8):
             angle = self.agent_heading + math.radians(i * 45.0)

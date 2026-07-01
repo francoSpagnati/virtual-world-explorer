@@ -146,10 +146,7 @@ class OpenGLRenderer:
                 print(f"[Model3D] WARNING: {path} non trovato")
 
     def capture_frame(self) -> list[np.ndarray] | None:
-        """
-        Esegue 8 rendering prospettici 3D dalle coordinate dell'agente 
-        (uno per ogni direzione a passi di 45 gradi) e restituisce una lista di 8 frame.
-        """
+
         if self.window is None:
             return None
 
@@ -157,7 +154,6 @@ class OpenGLRenderer:
         width, height = self.config.window_size, self.config.window_size
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
 
-        # Scansione sulle 8 direzioni orizzontali (0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SO, 6=O, 7=NO)
         for direction in range(8):
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             
@@ -220,11 +216,8 @@ class OpenGLRenderer:
             ay = self.env.agent_y
             az = 0.4
             
-            # Rotazione di base della testa inclinata verso il basso sulla griglia
             glRotatef(-90.0, 1.0, 0.0, 0.0)
             
-            # Calcolo continuo per le 8 telecamere:
-            # 0=N (180°), 1=NE (135°), 2=E (90°), 3=SE (45°), 4=S (0°), 5=SO (-45°), 6=O (-90°), 7=NO (-135°)
             z_angle = 180.0 - (direction * 45.0)
             glRotatef(z_angle, 0.0, 0.0, 1.0)
                 
@@ -262,31 +255,37 @@ class OpenGLRenderer:
         z_bottom = 0.0
         z_top = size
         glBegin(GL_QUADS)
+        # Superiore (normale +Z)
         glNormal3f(0, 0, 1)
         glVertex3f(x, y, z_top)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x, y + size, z_top)
+        # Inferiore (normale -Z)
         glNormal3f(0, 0, -1)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y, z_bottom)
+        # Frontale (normale -Y)
         glNormal3f(0, -1, 0)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x, y, z_top)
+        # Destra (normale +X)
         glNormal3f(1, 0, 0)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x + size, y, z_top)
+        # Posteriore (normale +Y)
         glNormal3f(0, 1, 0)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y + size, z_top)
         glVertex3f(x + size, y + size, z_top)
+        # Sinistra (normale -X)
         glNormal3f(-1, 0, 0)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y, z_bottom)

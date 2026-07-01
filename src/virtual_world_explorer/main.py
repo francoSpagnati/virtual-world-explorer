@@ -13,6 +13,7 @@ from .env import GridWorldEnv
 from .render import OpenGLRenderer
 from .owl_vision import OwlVisionDetector
 
+# Impostare a True per usare OWL-ViT in background durante la demo
 USE_OWL_VISION = True
 
 owl_frame_queue = queue.Queue(maxsize=1)
@@ -20,7 +21,6 @@ owl_result_queue = queue.Queue(maxsize=1)
 owl_result = {"dx": 0.0, "dy": 0.0, "visible": False}
 
 def owl_worker():
-    """Thread in background che esegue l'inferenza OWL-ViT sui frame renderizzati."""
     detector = OwlVisionDetector()
     while True:
         try:
@@ -45,13 +45,10 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
         state = env.reset()
         episode_reward = 0.0
         for _ in range(max_steps):
-            # Sceglie un'azione continua [v, w] (array numpy di 2 float)
             action = agent.choose_action(state)
             
-            # Passa l'array continuo all'ambiente
             next_state, reward, done, _ = env.step(action)
             
-            # Apprende passandogli l'array continuo dell'azione eseguita
             agent.learn(state, action, reward, next_state, done)
             
             state = next_state
@@ -59,7 +56,6 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
             if done:
                 break
                 
-        # Decadimento dell'esplorazione (rumore gaussiano/epsilon)
         agent.decay_exploration(minimum=0.01, factor=0.999)
         
         if (episode + 1) % 100 == 0:
@@ -131,7 +127,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                         dx, dy = owl_result["dx"], owl_result["dy"]
                         length = math.hypot(dx, dy)
                         if length > 0:
-                            # OWL-ViT restituisce la direzione globale; la convertiamo relativa all'agente
                             target_global_angle = math.atan2(dy, dx)
                             relative_angle = target_global_angle - env.agent_heading
                             current_state[0] = math.cos(relative_angle)
@@ -207,23 +202,15 @@ def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float]:
 
 
 def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], agent: QLearningAgent, recent_positions: list[tuple[float, float]], last_action: np.ndarray | None = None) -> np.ndarray:
-    """Versione per spazio delle azioni continuo."""
-    # Ottieni l'azione raccomandata dalla rete neurale politica
     action = agent.choose_action(state)
     
-    # Se l'agente non vede il target (state[2] == 0), forza l'esplorazione "Roomba-style":
-    # va dritto alla massima velocità senza curvare, scansionando la mappa.
     if state[2] == 0.0:
-        action[0] = 1.0   # Massima velocità in avanti
-        action[1] = 0.0   # Nessuna sterzata
+        action[0] = 1.0   
+        action[1] = 0.0  
         
-        # Se stava già sterzando per evitare un ostacolo, diamogli un po' di inerzia
-        # per completare la curva ed evitare di bloccarsi contro i muri.
         if last_action is not None and abs(last_action[1]) > 0.5:
              action[1] = last_action[1] * 0.8
         
-    # Semplice controllo predittivo: se l'azione lineare porta a una collisione imminente rilevata dal radar
-    # costringiamo l'agente a ruotare su se stesso (velocità lineare zero, velocità angolare attiva)
     v_input, w_input = action[0], action[1]
     linear_vel = max(0.0, ((v_input + 1.0) / 2.0) * env.max_linear_velocity)
     angular_vel = w_input * env.max_angular_velocity
@@ -233,9 +220,8 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
     next_y = env.agent_y + linear_vel * math.sin(future_heading)
     
     if env._check_collision_at(next_x, next_y):
-        # Ostacolo rilevato! Sterza bruscamente sul posto per evitare il blocco continuo
-        action[0] = -1.0 # Forza velocità lineare a zero
-        action[1] = 1.0 if w_input >= 0 else -1.0 # Sterza al massimo a destra o sinistra
+        action[0] = -1.0 
+        action[1] = 1.0 if w_input >= 0 else -1.0 
         
     return action
 

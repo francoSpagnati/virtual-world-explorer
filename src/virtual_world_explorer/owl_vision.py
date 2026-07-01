@@ -5,9 +5,7 @@ from transformers import OwlViTProcessor, OwlViTForObjectDetection
 
 class OwlVisionDetector:
     def __init__(self, model_name: str = "google/owlvit-base-patch32"):
-        """
-        Inizializza il modello OWL-ViT per la detection visuale zero-shot.
-        """
+
         self.device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         print(f"[OWL-ViT] Caricamento modello {model_name} su {self.device}...")
         self.processor = OwlViTProcessor.from_pretrained(model_name)
@@ -15,10 +13,7 @@ class OwlVisionDetector:
         print("[OWL-ViT] Modello caricato con successo.")
 
     def detect_target_multiview(self, images: list[Image.Image], target_names: list[str], threshold: float = 0.25) -> tuple[float, float, bool]:
-        """
-        Analizza un batch di 8 immagini a 360° gradi e cerca il target primario.
-        Restituisce vettori continui (global_dx, global_dy, visible).
-        """
+
         text_queries = [f"an object that is a {name}" for name in target_names]
         texts = [text_queries] * len(images)
         
@@ -57,19 +52,14 @@ class OwlVisionDetector:
         center_x = img_w / 2.0
         box_center_x = (best_box[0] + best_box[2]) / 2.0
         
-        # Calcolo dell'orientamento globale continuo basato sull'indice della telecamera
-        # 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SO, 6=O, 7=NO
-        # Angoli di orientamento mondo: N=270° (-90°), E=0°, S=90°, O=180°
         base_angle_deg = (best_image_idx * 45.0) - 90.0
         
-        # Offset orizzontale all'interno del frame (FOV di 90 gradi totale, quindi max offset = ±45 gradi)
         offset_fraction = (box_center_x - center_x) / center_x
         local_offset_deg = offset_fraction * 45.0
         
         global_angle_deg = base_angle_deg + local_offset_deg
         global_angle_rad = math.radians(global_angle_deg)
         
-        # Conversione in coordinate cartesiane normalizzate
         global_dx = math.cos(global_angle_rad)
         global_dy = math.sin(global_angle_rad)
             
