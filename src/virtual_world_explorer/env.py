@@ -31,10 +31,10 @@ class GridWorldEnv:
         
         self.agent_x = 0.0
         self.agent_y = 0.0
-        self.agent_theta = 0.0     # Angolo di orientamento in radianti (0 = Est, pi/2 = Nord...)
+        self.agent_theta = 0.0      
         self.agent_radius = 0.25  
-        self.step_size = 0.20      # Velocità lineare ad ogni passo
-        self.turn_size = 0.26      # Velocità angolare (circa 15 gradi a click)
+        self.step_size = 0.20      
+        self.turn_size = 0.26      
         self.objects: list[SceneObject] = []
 
     def reset(self) -> tuple[float, float, float, float, float, float, float]:
@@ -50,7 +50,7 @@ class GridWorldEnv:
         
         positions = self._sample_continuous_positions(len(object_specs) + 1)
         self.agent_x, self.agent_y = positions[0]
-        self.agent_theta = self.random.uniform(0, 2 * math.pi) # Angolo iniziale casuale
+        self.agent_theta = self.random.uniform(0, 2 * math.pi) 
         
         self.objects = [
             SceneObject(label=label, x=pos[0], y=pos[1], color=color)
@@ -65,7 +65,6 @@ class GridWorldEnv:
         next_x, next_y = self.agent_x, self.agent_y
         next_theta = self.agent_theta
 
-        # Cinematica del Robot (Unicycle Model)
         if action == FORWARD:
             next_x += self.step_size * math.cos(self.agent_theta)
             next_y += self.step_size * math.sin(self.agent_theta)
@@ -77,11 +76,9 @@ class GridWorldEnv:
         elif action == TURN_RIGHT:
             next_theta = (self.agent_theta - self.turn_size) % (2 * math.pi)
 
-        # Limiti fisici dell'arena
         next_x = max(self.agent_radius, min(self.size - self.agent_radius, next_x))
         next_y = max(self.agent_radius, min(self.size - self.agent_radius, next_y))
 
-        # Controllo collisioni geometriche
         hit_obstacle = False
         for obj in self.objects:
             if obj.label != self.target_label:
@@ -92,17 +89,14 @@ class GridWorldEnv:
         if hit_obstacle:
             reward = -1.0
             done = False
-            # Se sbatte, resta fermo dov'era prima
         else:
             self.agent_x, self.agent_y = next_x, next_y
             self.agent_theta = next_theta
             
             curr_dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
             
-            # Condizione di arrivo: tocca la sedia
             done = curr_dist < (self.agent_radius + target.radius)
             
-            # Reward shaping continuo basato sull'avvicinamento
             reward = -0.01 + 0.2 * (prev_dist - curr_dist)
             if done:
                 reward = 2.0
@@ -110,7 +104,7 @@ class GridWorldEnv:
         info = {
             "target_label": target.label, 
             "target_position": (target.x, target.y),
-            "agent_theta": self.agent_theta # Passiamo l'angolo al renderer se serve
+            "agent_theta": self.agent_theta 
         }
         return self._observation(), reward, done, info
 
@@ -118,18 +112,15 @@ class GridWorldEnv:
         target = self._target_object()
         dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
         
-        # Direzione float normalizzata (radar) se entro il raggio visivo
         if dist <= 3.5:
             abs_dx = (target.x - self.agent_x) / dist
             abs_dy = (target.y - self.agent_y) / dist
-            # Convert to local coordinates relative to agent's orientation
             dx = abs_dx * math.cos(self.agent_theta) + abs_dy * math.sin(self.agent_theta)
             dy = -abs_dx * math.sin(self.agent_theta) + abs_dy * math.cos(self.agent_theta)
             visible = 1.0
         else:
             dx, dy, visible = 0.0, 0.0, 0.0
 
-        # Radar di prossimità calibrato sulla direzione dello sguardo (Frontale, Posteriore, Sinistra, Destra)
         danger_forward = float(self._check_collision_at(
             self.agent_x + self.step_size * math.cos(self.agent_theta),
             self.agent_y + self.step_size * math.sin(self.agent_theta)
@@ -150,10 +141,8 @@ class GridWorldEnv:
         return (dx, dy, visible, danger_forward, danger_backward, danger_left, danger_right)
 
     def _check_collision_at(self, x: float, y: float) -> bool:
-        # Controlla bordi arena
         if x < self.agent_radius or x > (self.size - self.agent_radius): return True
         if y < self.agent_radius or y > (self.size - self.agent_radius): return True
-        # Controlla ostacoli
         for obj in self.objects:
             if obj.label != self.target_label:
                 if math.hypot(x - obj.x, y - obj.y) < (self.agent_radius + obj.radius):

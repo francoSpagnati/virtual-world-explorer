@@ -21,14 +21,13 @@ class QNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-class QLearningAgent:  # Manteniamo lo stesso nome per compatibilità con main.py
+class QLearningAgent: 
     def __init__(self, actions: int = 4, alpha: float = 0.001, gamma: float = 0.9, epsilon: float = 1.0) -> None:
         self.actions = actions
         self.gamma = gamma
         self.epsilon = epsilon
         self.random = random.Random(13)
         
-        # Reti neurali per DQN
         self.policy_net = QNetwork(input_dim=7, output_dim=actions)
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=alpha)
         self.loss_fn = nn.MSELoss()
@@ -46,8 +45,6 @@ class QLearningAgent:  # Manteniamo lo stesso nome per compatibilità con main.p
         state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         next_state_t = torch.tensor(next_state, dtype=torch.float32).unsqueeze(0)
         
-        # AGGIUSTAMENTO FORMALISMO DIMENSIONI (Risolve il Warning del Loss)
-        # Squeeze e unsqueeze espliciti mantengono le shape della loss a [1]
         current_q = self.policy_net(state_t)[0][action].unsqueeze(0) 
         reward_t = torch.tensor([reward], dtype=torch.float32)
         
@@ -57,14 +54,11 @@ class QLearningAgent:  # Manteniamo lo stesso nome per compatibilità con main.p
             else:
                 target_q = reward_t + self.gamma * self.policy_net(next_state_t).max(dim=1)[0]
                 
-        # Ora sia current_q che target_q hanno dimensione torch.Size([1])
         loss = self.loss_fn(current_q, target_q)
         
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-    # AGGIUSTAMENTO ARGOMENTO METODO (Risolve il TypeError)
-    # Cambiato il nome del parametro da min_epsilon a minimum per combaciare con main.py
     def decay_exploration(self, minimum: float = 0.05, factor: float = 0.997) -> None:
         self.epsilon = max(minimum, self.epsilon * factor)

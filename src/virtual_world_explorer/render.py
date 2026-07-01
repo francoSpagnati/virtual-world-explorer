@@ -184,7 +184,6 @@ class OpenGLRenderer:
         self._draw_objects()
         self._draw_agent()
         
-        # Converte l'angolo in gradi per l'HUD leggibile
         agent_deg = math.degrees(getattr(self.env, "agent_theta", 0.0)) % 360
         
         self._draw_hud_overlay([
@@ -214,21 +213,18 @@ class OpenGLRenderer:
             ay = self.env.agent_y
             az = 0.4
             
-            # Calcoliamo l'angolo di osservazione basato sull'orientamento del corpo del robot (agent_theta)
-            # In questo modo i 4 frame ruotano solidalmente con il robot
             base_theta = getattr(self.env, "agent_theta", 0.0)
             base_deg = math.degrees(base_theta)
 
-            glRotatef(-90.0, 1.0, 0.0, 0.0)  # Passaggio a Z-up globale
+            glRotatef(-90.0, 1.0, 0.0, 0.0)  
             
-            # Le 4 viste (0=Avanti, 1=Dietro, 2=Sinistra, 3=Destra) relative allo sguardo del robot
-            if direction == 0:    # FRONTALE (Direzione agent_theta)
+            if direction == 0:    
                 glRotatef(-90.0 - base_deg, 0.0, 0.0, 1.0)
-            elif direction == 1:  # POSTERIORE
+            elif direction == 1:  
                 glRotatef(90.0 - base_deg, 0.0, 0.0, 1.0)
-            elif direction == 2:  # SINISTRA
+            elif direction == 2:  
                 glRotatef(-base_deg, 0.0, 0.0, 1.0)
-            elif direction == 3:  # DESTRA
+            elif direction == 3:  
                 glRotatef(180.0 - base_deg, 0.0, 0.0, 1.0)
                 
             glTranslatef(-ax, -ay, -az)
@@ -265,31 +261,37 @@ class OpenGLRenderer:
         z_bottom = 0.0
         z_top = size
         glBegin(GL_QUADS)
+        # Superiore (normale +Z)
         glNormal3f(0, 0, 1)
         glVertex3f(x, y, z_top)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x, y + size, z_top)
+        # Inferiore (normale -Z)
         glNormal3f(0, 0, -1)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y, z_bottom)
+        # Frontale (normale -Y)
         glNormal3f(0, -1, 0)
         glVertex3f(x, y, z_bottom)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y, z_top)
         glVertex3f(x, y, z_top)
+        # Destra (normale +X)
         glNormal3f(1, 0, 0)
         glVertex3f(x + size, y, z_bottom)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x + size, y + size, z_top)
         glVertex3f(x + size, y, z_top)
+        # Posteriore (normale +Y)
         glNormal3f(0, 1, 0)
         glVertex3f(x + size, y + size, z_bottom)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y + size, z_top)
         glVertex3f(x + size, y + size, z_top)
+        # Sinistra (normale -X)
         glNormal3f(-1, 0, 0)
         glVertex3f(x, y + size, z_bottom)
         glVertex3f(x, y, z_bottom)
@@ -314,8 +316,6 @@ class OpenGLRenderer:
         glPushMatrix()
         glTranslatef(self.env.agent_x, self.env.agent_y, 0.0)
         
-        # ROTAZIONE VISIVA: Ruota il modello 3D sull'asse Z (up in OpenGL per questa scacchiera)
-        # in base all'angolo di imbardata (yaw) memorizzato in agent_theta
         agent_theta = getattr(self.env, "agent_theta", 0.0)
         glRotatef(math.degrees(agent_theta), 0.0, 0.0, 1.0)
         
@@ -351,7 +351,7 @@ class OpenGLRenderer:
         glLoadIdentity()
         start_x = 12.0
         start_y = self.config.window_size - 14.0
-        panel_width = 210.0  # Allargato leggermente per ospitare i gradi
+        panel_width = 210.0  
         panel_height = 30.0
         glColor3f(0.05, 0.05, 0.07)
         glRectf(start_x - 6.0, start_y + 8.0, start_x + panel_width, start_y - panel_height)
