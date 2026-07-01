@@ -5,7 +5,7 @@ from transformers import OwlViTProcessor, OwlViTForObjectDetection
 class OwlVisionDetector:
     def __init__(self, model_name: str = "google/owlvit-base-patch32"):
         """
-        Inizializza il modello OWL-ViT per la detection visuale zero-shot.
+        Inizializza il modello OWL-ViT per la detection visuale.
         """
         self.device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         print(f"[OWL-ViT] Caricamento modello {model_name} su {self.device}...")
@@ -57,8 +57,6 @@ class OwlVisionDetector:
         center_x, center_y = img_w / 2.0, img_h / 2.0
         
         # Definiamo dei margini stretti (es. 5%) attorno al centro per la "zona neutra"
-        # Se usassimo margini grandi (es. 20%), a 2 blocchi di distanza l'oggetto
-        # sembrerebbe già al centro (dx=0, dy=0) causando l'interruzione del movimento.
         margin_x = img_w * 0.05
         margin_y = img_h * 0.05
         
@@ -73,7 +71,7 @@ class OwlVisionDetector:
             
         # Y asse: L'immagine OpenGL ha Y=0 in alto.
         # Se la sedia è "più in alto" sullo schermo, significa che è "più lontana" lungo l'asse Y della griglia.
-        # Una Y maggiore sulla griglia significa "più in basso" (Azione 1: DOWN, dy=1).
+        # Una Y maggiore sulla griglia significa "più in basso".
         if box_center_y < center_y - margin_y:
             dy = 1 # Target più lontano -> Y griglia maggiore
         elif box_center_y > center_y + margin_y:
@@ -82,10 +80,10 @@ class OwlVisionDetector:
         return dx, dy, True
 
 if __name__ == "__main__":
-    # Piccolo script di test per provare che si inizializzi e non dia errori
+    # Piccolo script di test 
     detector = OwlVisionDetector()
     
-    # Creiamo un'immagine finta per testare la pipeline
+    # finta immagine per testare la pipeline
     test_img = Image.new('RGB', (720, 720), color = 'white')
     dx, dy, vis = detector.detect_target(test_img, "chair")
     print(f"Risultato test finto: dx={dx}, dy={dy}, visible={vis}")

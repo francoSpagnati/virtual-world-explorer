@@ -152,7 +152,7 @@ class OpenGLRenderer:
         if self.window is None:
             return None
             
-        # Draw the egocentric view for OWL-ViT to the back buffer
+        # disegna la scena in modalità egocentrica
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         self._setup_camera(egocentric=True)
         self._draw_grid()

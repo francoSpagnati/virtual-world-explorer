@@ -55,7 +55,7 @@ class Model3D:
         all_vertices = []
         
         for name, geom in geoms:
-            # Transform vertices: Y-up to Z-up
+            # Trasforma le coordinate dei vertici da Y-up a Z-up
             v = geom.vertices
             v_transformed = np.column_stack((v[:, 0], v[:, 2], v[:, 1]))
             all_vertices.append(v_transformed)
