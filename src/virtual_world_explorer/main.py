@@ -19,7 +19,6 @@ owl_result_queue = queue.Queue(maxsize=1)
 owl_result = {"dx": 0, "dy": 0, "visible": False}
 
 def owl_worker():
-    """Thread in background che esegue l'inferenza OWL-ViT sui frame renderizzati."""
     detector = OwlVisionDetector()
     while True:
         try:
@@ -52,7 +51,6 @@ def train_agent(episodes: int = 15000, max_steps: int | None = None) -> tuple[Gr
             episode_reward += reward
             if done:
                 break
-        # Usiamo un decadimento più lento per esplorare meglio lo spazio degli stati
         agent.decay_exploration(minimum=0.01, factor=0.999)
         if (episode + 1) % 500 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
@@ -88,7 +86,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                     if agent_pos in episode_owl_cache:
                         owl_result.update(episode_owl_cache[agent_pos])
                     else:
-                        # Otteniamo la lista delle 4 inquadrature orizzontali
                         frames_list = renderer.capture_frame()
                         
                         if frames_list is not None:
@@ -97,13 +94,10 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                             while not owl_result_queue.empty():
                                 owl_result_queue.get()
                             
-                            # Invia tutte e 4 le inquadrature per la scansione a 360 gradi
                             images = [Image.fromarray(f) for f in frames_list]
                             target_names = [env.target_label, "table", "lamp"]
                             owl_frame_queue.put((images, target_names))
                             
-                            # Ciclo di attesa che continua a renderizzare la vista zenitale principale 
-                            # evitando blocchi o schermate nere sull'interfaccia utente
                             while owl_result_queue.empty():
                                 renderer.draw()
                                 renderer.poll()
@@ -131,7 +125,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
                 state, _, done, _ = env.step(action)
                 last_action = action
                 
-                # Renderizza la normale vista zenitale d'osservazione
                 renderer.draw()
                 renderer.poll()
                 
@@ -208,8 +201,6 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent
         next_position = _preview_position(env, action)
         score = values[action]
         
-        # Momentum: solo se NON vede il bersaglio (state[2] == 0)
-        # altrimenti rischia di ignorare la sedia se ci passa di fianco
         if state[2] == 0 and last_action is not None and action == last_action:
             score += 0.5
             
