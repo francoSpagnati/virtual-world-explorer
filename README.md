@@ -22,8 +22,6 @@ python src/virtual_world_explorer/main.py
 
 ## Component Guide
 
-This project is modularly structured into the following core components:
-
 - **`main.py`**: The central orchestrator. It executes the RL training (`train_agent`), runs the visual demo (`run_demo`), coordinates background inference for computer vision, and applies movement heuristics to prevent looping.
 - **`render.py`**: The 3D visual frontend. Uses PyOpenGL to render a 3D perspective with lighting, textured OBJ models for the agent and obstacles, and an orthographic HUD. It also captures the 360° visual frames used by the AI.
 - **`model3d.py`**: A dedicated 3D utility module that leverages `trimesh` to load 3D assets (OBJ, MTL) and their textures, mapping them seamlessly into the immediate-mode OpenGL scene.
