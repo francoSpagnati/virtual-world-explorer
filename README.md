@@ -20,11 +20,7 @@ Alternatively, you can run the entry script directly:
 python src/virtual_world_explorer/main.py
 ```
 
-## Component Guide (Synthesized)
-
-The **Virtual World Explorer 3D** trains an agent (a robot) to navigate a continuous 3D environment to find a target (a chair) while avoiding obstacles (a table and a lamp). It employs Reinforcement Learning (DDPG) alongside a visual perception module (OWL-ViT) for object detection.
-
-### Architecture Overview
+## Component Guide
 
 - **`src/virtual_world_explorer/main.py`**
   The entry point of the application. It orchestrates the entire flow: running the training loop (`train_agent`), managing the 3D visual demo (`run_demo`), and handling batched inferences for zero-shot object detection to prevent gameplay lag.
