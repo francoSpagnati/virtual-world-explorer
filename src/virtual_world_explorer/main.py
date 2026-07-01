@@ -21,7 +21,6 @@ owl_result_queue = queue.Queue(maxsize=1)
 owl_result = {"dx": 0, "dy": 0, "visible": False}
 
 def owl_worker():
-    """Thread in background che esegue l'inferenza OWL-ViT sui frame renderizzati."""
     detector = OwlVisionDetector()
     while True:
         try:
@@ -54,7 +53,6 @@ def train_agent(episodes: int = 30000, max_steps: int | None = None) -> tuple[Gr
             episode_reward += reward
             if done:
                 break
-        # Usiamo un decadimento più lento per esplorare meglio lo spazio degli stati
         agent.decay_exploration(minimum=0.01, factor=0.999)
         if (episode + 1) % 500 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
@@ -179,20 +177,17 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None,
 
 
 def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float]:
-    """Prevede la posizione float futura dell'agente per l'euristica anti-loop."""
     x, y = env.agent_x, env.agent_y
-    step_size = 0.25  # Allineato con il valore in env.py
+    step_size = 0.25  
     
     if action == 0:    y -= step_size
     elif action == 1:  y += step_size
     elif action == 2:  x -= step_size
     elif action == 3:  x += step_size
         
-    # Applica i limiti dell'arena tenendo conto del raggio dell'agente
     x = max(env.agent_radius, min(env.size - env.agent_radius, x))
     y = max(env.agent_radius, min(env.size - env.agent_radius, y))
     
-    # Se va a sbattere contro un ostacolo, l'ambiente lo lascerà fermo
     for obj in env.objects:
         if obj.label != env.target_label:
             if math.hypot(x - obj.x, y - obj.y) < (env.agent_radius + obj.radius):
@@ -201,7 +196,6 @@ def _preview_position(env: GridWorldEnv, action: int) -> tuple[float, float]:
 
 
 def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], agent: QLearningAgent, recent_positions: list[tuple[float, float]], last_action: int | None = None) -> int:
-    # Estraiamo i valori Q dalla rete neurale DQN dell'agente
     with torch.no_grad():
         state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         values = agent.policy_net(state_t).squeeze(0).tolist()
@@ -215,15 +209,12 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[float, ...], age
         next_position = _preview_position(env, action)
         score = values[action]
         
-        # Momentum: se non vede il bersaglio (state[2] == 0.0)
         if state[2] == 0.0 and last_action is not None and action == last_action:
             score += 2.0
             
         if next_position == current_position:
             score -= 2.0
             
-        # Controllo di prossimità continua anziché uguaglianza perfetta
-        # Se la posizione futura è vicina a una recentemente visitata (tolleranza 0.2), penalizza
         visit_count = sum(1 for pos in recent_positions if math.hypot(next_position[0] - pos[0], next_position[1] - pos[1]) < 0.2)
         if visit_count > 0:
             score -= 3.0 * visit_count

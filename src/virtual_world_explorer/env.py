@@ -16,22 +16,22 @@ RIGHT = 3
 @dataclass(frozen=True)
 class SceneObject:
     label: str
-    x: float  # Coordinate continue
-    y: float  # Coordinate continue
+    x: float  
+    y: float  
     color: tuple[float, float, float]
-    radius: float = 0.35  # Raggio fisico di ingombro dell'ostacolo
+    radius: float = 0.35 
 
-class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
+class GridWorldEnv: 
     def __init__(self, size: int = 7, seed: int = 7, detector: SemanticDetector | None = None) -> None:
-        self.size = float(size)  # L'arena diventa uno spazio continuo float (es. da 0.0 a 7.0)
+        self.size = float(size) 
         self.random = random.Random(seed)
         self.detector = detector or SemanticDetector()
         self.target_label = "chair"
         
         self.agent_x = 0.0
         self.agent_y = 0.0
-        self.agent_radius = 0.25  # Raggio fisico dell'agente cubo
-        self.step_size = 0.25     # Di quanto si sposta l'agente ad ogni azione discreta
+        self.agent_radius = 0.25  
+        self.step_size = 0.25 
         self.objects: list[SceneObject] = []
 
     def reset(self) -> tuple[float, float, float, float, float, float, float]:
@@ -45,7 +45,6 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
             ("lamp", (0.9, 0.7, 0.2)),
         ]
         
-        # Genera posizioni float non sovrapposte
         positions = self._sample_continuous_positions(len(object_specs) + 1)
         self.agent_x, self.agent_y = positions[0]
         
@@ -59,18 +58,15 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
         target = self._target_object()
         prev_dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
 
-        # Calcolo lo spostamento potenziale in base all'azione discreta scelta
         next_x, next_y = self.agent_x, self.agent_y
         if action == UP:    next_y -= self.step_size
         elif action == DOWN:  next_y += self.step_size
         elif action == LEFT:  next_x -= self.step_size
         elif action == RIGHT: next_x += self.step_size
 
-        # Limiti fisici dell'arena tenendo conto del raggio dell'agente
         next_x = max(self.agent_radius, min(self.size - self.agent_radius, next_x))
         next_y = max(self.agent_radius, min(self.size - self.agent_radius, next_y))
 
-        # Controllo geometrico collisioni con ostacoli (esclusa la sedia)
         hit_obstacle = False
         for obj in self.objects:
             if obj.label != self.target_label:
@@ -82,15 +78,12 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
         if hit_obstacle:
             reward = -1.0
             done = False
-            # Se sbatte, resta fermo dov'era prima
         else:
             self.agent_x, self.agent_y = next_x, next_y
             curr_dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
             
-            # Condizione di arrivo: tocca la sedia
             done = curr_dist < (self.agent_radius + target.radius)
             
-            # Reward shaping continuo
             reward = -0.05 + 0.1 * (prev_dist - curr_dist)
             if done:
                 reward = 2.0
@@ -102,7 +95,6 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
         target = self._target_object()
         dist = math.hypot(self.agent_x - target.x, self.agent_y - target.y)
         
-        # Direzione float normalizzata (radar) se entro il raggio visivo
         if dist <= 3.5:
             dx = (target.x - self.agent_x) / dist
             dy = (target.y - self.agent_y) / dist
@@ -110,7 +102,6 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
         else:
             dx, dy, visible = 0.0, 0.0, 0.0
 
-        # Sensori di pericolo geometrici: controllano in avanti se l'azione porterebbe a collisione
         danger_up = float(self._check_collision_at(self.agent_x, self.agent_y - self.step_size))
         danger_down = float(self._check_collision_at(self.agent_x, self.agent_y + self.step_size))
         danger_left = float(self._check_collision_at(self.agent_x - self.step_size, self.agent_y))
@@ -119,10 +110,8 @@ class GridWorldEnv:  # Manteniamo lo stesso nome classe per non rompere main.py
         return (dx, dy, visible, danger_up, danger_down, danger_left, danger_right)
 
     def _check_collision_at(self, x: float, y: float) -> bool:
-        # Controlla bordi arena
         if x < self.agent_radius or x > (self.size - self.agent_radius): return True
         if y < self.agent_radius or y > (self.size - self.agent_radius): return True
-        # Controlla ostacoli
         for obj in self.objects:
             if obj.label != self.target_label:
                 if math.hypot(x - obj.x, y - obj.y) < (self.agent_radius + obj.radius):
