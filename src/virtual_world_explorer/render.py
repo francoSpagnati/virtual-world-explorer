@@ -148,11 +148,9 @@ class OpenGLRenderer:
         glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, [*diffuse, 1.0])
 
     def capture_frame(self) -> np.ndarray | None:
-        """Cattura la visuale egocentrica per OWL-ViT."""
         if self.window is None:
             return None
             
-        # disegna la scena in modalità egocentrica
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         self._setup_camera(egocentric=True)
         self._draw_grid()
@@ -200,9 +198,6 @@ class OpenGLRenderer:
         far_val = 50.0
         
         if egocentric:
-            # Proiezione ortografica ristretta per la telecamera dell'IA:
-            # - Il raggio visivo è limitato a circa 3 blocchi (view_size = 3.5).
-            # - Se il target è oltre questo raggio, non viene disegnato nell'immagine.
             view_size = 3.5
             glOrtho(-view_size, view_size, -view_size, view_size, near_val, far_val)
         else:

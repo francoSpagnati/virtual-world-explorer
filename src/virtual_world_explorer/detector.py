@@ -16,7 +16,6 @@ class SemanticDetector:
         self.vision_radius = vision_radius
 
     def detect(self, objects: list[object], agent_position: tuple[int, int], target_label: str) -> Detection:
-        """Analizza la scena per localizzare l'oggetto target rispetto all'agente."""
         target = None
         for scene_object in objects:
             if getattr(scene_object, "label", None) == target_label:
@@ -30,12 +29,10 @@ class SemanticDetector:
         dx = target.x - agent_x
         dy = target.y - agent_y
         
-        # Verifica se l'oggetto rientra nel raggio visivo dell'agente
         visible = abs(dx) <= self.vision_radius and abs(dy) <= self.vision_radius
         if not visible:
             return Detection(label=target.label, dx=0, dy=0, visible=False)
 
-        # normalize direction
         return Detection(label=target.label, dx=self._sign(dx), dy=self._sign(dy), visible=True)
 
     @staticmethod

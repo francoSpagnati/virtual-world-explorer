@@ -78,7 +78,6 @@ class GridWorldEnv:
             current_distance = self._manhattan_distance(self.agent_x, self.agent_y, target.x, target.y)
             done = self.agent_x == target.x and self.agent_y == target.y
             
-            # Forte penalità per ogni passo per incoraggiare percorsi brevi
             reward = -0.1 + 0.05 * (previous_distance - current_distance)
             if previous_position == (self.agent_x, self.agent_y):
                 reward -= 0.2

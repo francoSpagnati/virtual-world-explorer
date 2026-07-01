@@ -19,7 +19,6 @@ owl_result_queue = queue.Queue(maxsize=1)
 owl_result = {"dx": 0, "dy": 0, "visible": False}
 
 def owl_worker():
-    """Thread in background che esegue l'inferenza OWL-ViT sui frame renderizzati."""
     detector = OwlVisionDetector()
     while True:
         try:
@@ -48,7 +47,6 @@ def train_agent(episodes: int = 15000, max_steps: int = 50) -> tuple[GridWorldEn
             episode_reward += reward
             if done:
                 break
-        # Decadimento più lento per esplorare meglio lo spazio degli stati
         agent.decay_exploration(minimum=0.01, factor=0.999)
         if (episode + 1) % 500 == 0:
             print(f"Episode {episode + 1:05d}: reward={episode_reward:.2f} epsilon={agent.epsilon:.2f}")
@@ -80,7 +78,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
             while not renderer.should_close():
                 agent_pos = (env.agent_x, env.agent_y)
                 
-                # Invio nuovo frame al thread di visione se abilitato
                 if USE_OWL_VISION:
                     if agent_pos in episode_owl_cache:
                         owl_result.update(episode_owl_cache[agent_pos])
@@ -95,7 +92,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                             img = Image.fromarray(frame_np)
                             owl_frame_queue.put((img, env.target_label))
                             
-                            # Attendiamo il risultato
                             while owl_result_queue.empty():
                                 renderer.poll()
                                 if renderer.should_close():
@@ -109,7 +105,6 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                             owl_result.update(res)
                             episode_owl_cache[agent_pos] = res
 
-                # Override visivo con i risultati di OWL-ViT se abilitato
                 current_state = list(state)
                 if USE_OWL_VISION:
                     current_state[0] = owl_result["dx"]
@@ -124,11 +119,9 @@ def run_demo(env: GridWorldEnv, agent: QLearningAgent, steps: int | None = None)
                 renderer.draw()
                 renderer.poll()
                 
-                # sleep
                 if not USE_OWL_VISION or (USE_OWL_VISION and agent_pos in episode_owl_cache):
                     time.sleep(0.35)
                 
-                # Trova l'oggetto target per stamparne la posizione reale
                 target_obj = next((obj for obj in env.objects if obj.label == env.target_label), None)
                 target_pos = (target_obj.x, target_obj.y) if target_obj else (None, None)
                 
@@ -194,7 +187,6 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent
         next_position = _preview_position(env, action)
         score = values[action]
         
-        # Momentum
         if state[2] == 0 and last_action is not None and action == last_action:
             score += 0.5
             
