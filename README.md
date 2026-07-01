@@ -20,11 +20,7 @@ Alternatively, you can run the entry script directly:
 python src/virtual_world_explorer/main.py
 ```
 
-## Component Guide (Synthesized)
-
-The **Virtual World Explorer 3D** trains an agent to navigate a 3D environment to find a target while avoiding obstacles. It employs Reinforcement Learning (Q-Learning) alongside a visual perception module (OWL-ViT) for zero-shot object detection.
-
-### Architecture Overview
+## Component Guide
 
 - **`src/virtual_world_explorer/main.py`**
   The entry point of the application. It runs the training loop, manages the 3D visual demo, and handles batched inferences for zero-shot object detection.
