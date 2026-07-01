@@ -35,12 +35,12 @@ def owl_worker():
 
 def train_agent(grid_size: int = 7, episodes: int = 15000, max_steps: int | None = None) -> tuple[GridWorldEnv, QLearningAgent]:
     
-    # Passiamo la griglia dinamica qui
+    # Passiamo la griglia dinamica
     env = GridWorldEnv(size=grid_size)
     agent = QLearningAgent()
     
     if max_steps is None:
-        # Molto importante: in un mondo più grande servono più passi per esplorare
+        # Pù passi per esplorare
         max_steps = env.size * env.size 
 
     for episode in range(episodes):
@@ -209,8 +209,7 @@ def _choose_action_without_loop(env: GridWorldEnv, state: tuple[int, ...], agent
         next_position = _preview_position(env, action)
         score = values[action]
         
-        # Momentum: solo se NON vede il bersaglio (state[2] == 0)
-        # altrimenti rischia di ignorare la sedia se ci passa di fianco
+        # Momentum: solo se NON vede il bersaglio
         if state[2] == 0 and last_action is not None and action == last_action:
             score += 0.5
             

@@ -86,7 +86,7 @@ class OwlVisionDetector:
         return global_dx, global_dy, True
 
 if __name__ == "__main__":
-    # Piccolo script di test per provare che si inizializzi e non dia errori
+    # Piccolo script di test
     detector = OwlVisionDetector()
     
     test_images = [Image.new('RGB', (720, 720), color = 'white') for _ in range(4)]

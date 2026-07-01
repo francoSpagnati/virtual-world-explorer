@@ -210,7 +210,7 @@ class OpenGLRenderer:
         glLoadIdentity()
         
         near_val = 0.1
-        far_val = 150.0  # Aumentato da 50.0 a 150.0 per evitare il clipping ad arene grandi
+        far_val = 150.0  # Aumentato da 50.0 a 150.0 per evitare il clipping
 
         if egocentric:
             # La telecamera AI rimane invariata perché scansiona a 360° con FOV fisso ad altezza occhi

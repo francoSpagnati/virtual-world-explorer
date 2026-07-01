@@ -33,13 +33,12 @@ class GridWorldEnv:
 
     def reset(self) -> tuple[int, int, int, int, int, int, int]:
         # Calcoliamo dinamicamente quanti ostacoli inserire per mantenere la densità costante.
-        # Per una griglia 7x7 (49 celle), 6 ostacoli + 1 sedia = ~14% di riempimento.
         num_distractors = max(2, int((self.size ** 2) * 0.12))
         
-        # Generiamo la lista degli oggetti partendo sempre dalla sedia (target)
+        # Generiamo la lista degli oggetti partendo dalla sedia (target)
         object_specs = [("chair", (0.1, 0.7, 0.2))]
         
-        # Alterniamo tavoli e lampade come ostacoli
+        # Alterniamo tavoli e lampade
         for i in range(num_distractors):
             if i % 2 == 0:
                 object_specs.append(("table", (0.2, 0.4, 0.9)))

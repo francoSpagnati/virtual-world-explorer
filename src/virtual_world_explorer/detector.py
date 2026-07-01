@@ -30,7 +30,7 @@ class SemanticDetector:
         dx = target.x - agent_x
         dy = target.y - agent_y
         
-        # Verifica se l'oggetto rientra nel raggio visivo limitato dell'agente
+        # Verifica se l'oggetto rientra nel raggio visivo dell'agente
         visible = abs(dx) <= self.vision_radius and abs(dy) <= self.vision_radius
         if not visible:
             return Detection(label=target.label, dx=0, dy=0, visible=False)
